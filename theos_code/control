@@ -1,0 +1,9 @@
+Package: com.sirzenith.zrc-server
+Name: zrc-server
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Server side for Zrcaea.
+Maintainer: SirZenith
+Author: SirZenith
+Section: System
+Tag: role::hacker
