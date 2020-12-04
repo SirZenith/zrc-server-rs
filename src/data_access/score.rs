@@ -1,8 +1,7 @@
+use super::*;
 use std::time::SystemTime;
 
-use super::*;
-
-#[derive(FromForm, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ScoreRecord {
     song_token: String,
     song_hash: String,
@@ -10,16 +9,12 @@ pub struct ScoreRecord {
     difficulty: i8,
     score: isize,
     #[serde(rename = "shiny_perfect_count")]
-    #[form(field = "shiny_perfect_count")]
     shiny: isize,
     #[serde(rename = "perfect_count")]
-    #[form(field = "perfect_count")]
     pure: isize,
     #[serde(rename = "near_count")]
-    #[form(field = "near_count")]
     far: isize,
     #[serde(rename = "miss_count")]
-    #[form(field = "miss_count")]
     lost: isize,
     health: i8,
     modifier: isize,
@@ -29,30 +24,29 @@ pub struct ScoreRecord {
 }
 
 impl ScoreRecord {
-    pub fn new() -> Self {
-        ScoreRecord {
-            song_hash: String::new(),
-            song_token: String::new(),
-            song_id: String::new(),
-            difficulty: 0,
-            score: 0,
-            shiny: 0,
-            pure: 0,
-            far: 0,
-            lost: 0,
-            health: 0,
-            modifier: 0,
-            beyond_gauge: 0,
-            clear_type: 0,
-        }
-    }
+    // fn new() -> Self {
+    //     ScoreRecord {
+    //         song_hash: String::new(),
+    //         song_token: String::new(),
+    //         song_id: String::new(),
+    //         difficulty: 0,
+    //         score: 0,
+    //         shiny: 0,
+    //         pure: 0,
+    //         far: 0,
+    //         lost: 0,
+    //         health: 0,
+    //         modifier: 0,
+    //         beyond_gauge: 0,
+    //         clear_type: 0,
+    //     }
+    // }
 
-    pub fn score2rating(&self, conn: &rusqlite::Transaction) -> Result<f64, rusqlite::Error> {
-        let mut base_rating = 0.;
-        conn.query_row(
+    fn score2rating(&self, tx: &rusqlite::Transaction) -> Result<f64, rusqlite::Error> {
+        let base_rating: f64 = tx.query_row(
             sql_stmt::BASE_RATING,
-            &[&self.song_id, &self.difficulty],
-            |row| base_rating = row.get(0),
+            params![self.song_id, self.difficulty],
+            |row| row.get(0),
         )?;
         if base_rating == 0.0 {
             return Err(rusqlite::Error::QueryReturnedNoRows);
@@ -71,7 +65,7 @@ impl ScoreRecord {
         Ok(rating)
     }
 
-    pub fn insert_score_record(
+    fn insert_score_record(
         &self,
         tx: &rusqlite::Transaction,
         user_id: isize,
@@ -79,50 +73,49 @@ impl ScoreRecord {
         rating: f64,
     ) -> Result<(), rusqlite::Error> {
         let mut stmt = tx.prepare(sql_stmt::INSERT_SCORE)?;
-        stmt.execute(&[
-            &user_id,
-            &time_played,
-            &self.song_id,
-            &self.difficulty,
-            &self.score,
-            &self.shiny,
-            &self.pure,
-            &self.far,
-            &self.lost,
-            &rating,
-            &self.health,
-            &self.clear_type,
+        stmt.execute(params![
+            user_id,
+            time_played,
+            self.song_id,
+            self.difficulty,
+            self.score,
+            self.shiny,
+            self.pure,
+            self.far,
+            self.lost,
+            rating,
+            self.health,
+            self.clear_type,
         ])?;
         Ok(())
     }
 
-    pub fn update_best_score(
+    fn update_best_score(
         &self,
         tx: &rusqlite::Transaction,
         user_id: isize,
         time_played: i64,
     ) -> Result<(), rusqlite::Error> {
         let mut stmt = tx.prepare(sql_stmt::QUERY_BEST_SCORE)?;
-        let result = stmt.query_row(&[&user_id, &self.song_id, &self.difficulty], |row| {
-            (row.get::<usize, isize>(0), row.get::<usize, i64>(1))
+        let result = stmt.query_row(params![user_id, self.song_id, self.difficulty], |row| {
+            Ok((row.get::<usize, isize>(0)?, row.get::<usize, i64>(1)?))
         });
         match result {
             Ok((score, played_date)) => {
                 if score < self.score {
-                    tx.execute(sql_stmt::UPDATE_BEST_SCORE, &[&time_played, &played_date])?;
+                    tx.execute(sql_stmt::UPDATE_BEST_SCORE, params![time_played, played_date])?;
                 }
             }
             Err(e) => match e {
                 rusqlite::Error::QueryReturnedNoRows => {
-                    tx.execute(sql_stmt::INSERT_BEST_SCORE, &[&user_id, &time_played])?;
+                    tx.execute(sql_stmt::INSERT_BEST_SCORE, params![user_id, time_played])?;
                 }
                 _ => return Err(e),
             },
         }
         Ok(())
     }
-    
-    pub fn update_recent_score(
+    fn update_recent_score(
         &self,
         tx: &rusqlite::Transaction,
         user_id: isize,
@@ -136,15 +129,15 @@ impl ScoreRecord {
         let new_identifier = format!("{}{}", self.song_id, self.difficulty);
         let mut inserter = RecentScoreInserter::new();
         let mut stmt = tx.prepare(sql_stmt::QUERY_RECENT_SCORE)?;
-        let items = stmt.query_map(&[&user_id], |row| {
-            (
+        let items = stmt.query_map(params![user_id], |row| {
+            Ok((
                 RecentScoreItem {
-                    played_date: row.get("played_date"),
-                    rating: row.get("rating"),
+                    played_date: row.get("played_date")?,
+                    rating: row.get("rating")?,
                 },
-                row.get("iden"),
-                row.get::<&str, String>("is_recent_10") == "t",
-            )
+                row.get("iden")?,
+                row.get::<&str, String>("is_recent_10")? == "t",
+            ))
         })?;
         for item in items {
             let item = item.unwrap();
@@ -234,7 +227,7 @@ impl RecentScoreInserter {
                 if record.rating <= target.rating {
                     tx.execute(
                         sql_stmt::REPLACE_RECENT_SCORE,
-                        &[&target.played_date, &"t", &user_id, &record.played_date],
+                        params![target.played_date, "t", user_id,  record.played_date],
                     )?;
                     ret_target = Some(record);
                 } else {
@@ -247,7 +240,7 @@ impl RecentScoreInserter {
                     if r30_not_full {
                         tx.execute(
                             sql_stmt::INSERT_RECENT_SCORE,
-                            &[&user_id, &target.played_date, &"t"],
+                        params![user_id, target.played_date, "t"],
                         )?;
                         // no need for further process, no target any more
                         ret_target = None;
@@ -280,7 +273,7 @@ impl RecentScoreInserter {
                         let record = replacement.take().unwrap();
                         tx.execute(
                             sql_stmt::REPLACE_RECENT_SCORE,
-                            &[&target.played_date, &"t", &user_id, &record.played_date],
+                            params![target.played_date, "t", user_id, record.played_date],
                         )?;
                         ret_target = Some(record);
                         is_r10 = false;
@@ -317,11 +310,11 @@ impl RecentScoreInserter {
             // is_r10 will be true only when r10 is not full but r30 is.
             tx.execute(
                 sql_stmt::REPLACE_RECENT_SCORE,
-                &[
-                    &target.played_date,
-                    &"t",
-                    &user_id,
-                    &self.normal_item[0].played_date,
+                params![
+                    target.played_date,
+                    "t",
+                    user_id,
+                    self.normal_item[0].played_date,
                 ],
             )?;
             target = &self.normal_item[0];
@@ -329,7 +322,7 @@ impl RecentScoreInserter {
         if self.r10.len() + self.normal_item.len() < 30 {
             tx.execute(
                 sql_stmt::INSERT_RECENT_SCORE,
-                &[&user_id, &target.played_date, &""],
+                params![user_id, target.played_date, ""],
             )?;
             return Ok(());
         }
@@ -348,7 +341,7 @@ impl RecentScoreInserter {
         if r.played_date != target.played_date {
             tx.execute(
                 sql_stmt::REPLACE_RECENT_SCORE,
-                &[&target.played_date, &"", &user_id, &r.played_date],
+                params![target.played_date, "", user_id, r.played_date],
             )?;
         }
         if need_new_r10 {
@@ -358,38 +351,24 @@ impl RecentScoreInserter {
             let new_r10 = self.normal_item[0].played_date;
             tx.execute(
                 sql_stmt::INSERT_RECENT_SCORE,
-                &[&new_r10, &"t", &user_id, &new_r10],
+                params![new_r10, "t", user_id, new_r10],
             )?;
         }
         Ok(())
     }
 }
 
-#[get("/token")]
-pub fn token() -> String {
-    format!(
-        r#"{{"success": true, "value": {{"token": "{}"}}}}"#,
-        gen_token()
-    )
-}
-
-fn gen_token() -> String {
-    "nothing".to_string()
-}
-
-#[post("/song", data = "<score_record>")]
 pub fn score_upload(
-    mut conn: ZrcDB,
-    score_record: LenientForm<ScoreRecord>,
-) -> Result<Json<ResponseContainer<HashMap<String, isize>>>, rusqlite::Error> {
+    conn: &mut DBAccessManager,
+    score_record: ScoreRecord,
+    user_id: isize,
+) -> Result<ResponseContainer<HashMap<String, isize>>, rusqlite::Error> {
     let mut result = ResponseContainer {
         success: true,
         value: HashMap::new(),
         error_code: 0,
     };
-    let tx = conn.transaction()?;
-    let score_record = score_record.into_inner();
-    let user_id = STATIC_USER_ID;
+    let tx = conn.connection.transaction()?;
     let rating = score_record.score2rating(&tx)?;
     let time_played = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -401,31 +380,17 @@ pub fn score_upload(
     let rating = update_player_rating(&tx, user_id)?;
     tx.commit()?;
     result.value.insert("user_rating".to_string(), rating);
-    Ok(Json(result))
+    Ok(result)
 }
 
 fn update_player_rating(
     tx: &rusqlite::Transaction,
     user_id: isize,
 ) -> Result<isize, rusqlite::Error> {
-    let mut rating: f64 = 0.0;
-    let mut stmt = tx.prepare(sql_stmt::QUERY_BEST_RATING).unwrap();
-    let best_ratings = stmt
-        .query_map(&[&STATIC_USER_ID], |row| row.get(0))
-        .unwrap();
-    let (mut sum, mut count) = (0.0, 0);
-    for rating in best_ratings {
-        let rating: f64 = rating.unwrap();
-        sum += rating;
-        count += 1;
-        if count > 30 {
-            break;
-        }
-    }
-    stmt = tx.prepare(sql_stmt::COMPUTE_RATING)?;
-    stmt.query_row(&[&STATIC_USER_ID, &sum, &count], |row| rating = row.get(0))?;
+    let mut stmt = tx.prepare(sql_stmt::COMPUTE_RATING)?;
+    let rating: f64 = stmt.query_row(params![user_id], |row| row.get(0))?;
     stmt = tx.prepare(sql_stmt::UPDATE_RATING)?;
-    stmt.execute(&[&rating, &user_id])?;
+    stmt.execute(params![rating, user_id])?;
 
     Ok(rating as isize)
 }

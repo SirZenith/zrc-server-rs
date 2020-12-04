@@ -1,37 +1,42 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+extern crate libc;
+extern crate r2d2;
+extern crate r2d2_sqlite;
+#[macro_use]
+extern crate rusqlite;
+extern crate serde;
+extern crate strfmt;
+extern crate structopt;
+extern crate warp;
+
+pub mod api;
+pub mod data_access;
+pub mod sql_stmt;
+
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
+use std::sync::Arc;
 
-extern crate libc;
 use libc::{c_char, c_int, size_t};
 use std::ffi::CStr;
 use std::slice::from_raw_parts;
 use std::str::Utf8Error;
 
-#[macro_use]
-extern crate rocket;
-use rocket::config::{Config, Environment, Value};
-use rocket::config::LoggingLevel;
-use rocket::request::{Form, LenientForm};
-use rocket::request::{FormItems, FromForm};
+use r2d2::{Pool, PooledConnection};
 
-extern crate rocket_contrib;
-use rocket_contrib::database;
-use rocket_contrib::json::Json;
+use r2d2_sqlite::SqliteConnectionManager;
 
-extern crate rusqlite;
-
-extern crate strfmt;
-
-extern crate serde;
 use serde::{Deserialize, Serialize};
 
-extern crate structopt;
 use structopt::StructOpt;
 
-#[database("zrc_db")]
-pub struct ZrcDB(rusqlite::Connection);
+use warp::Filter;
+
+use data_access::*;
+
+const STATIC_USER_ID: isize = 1;
+const FILE_SERVER_PREFIX: &str = "/file";
+const SONG_FILE_DIR: &str = "static/songs";
 
 #[derive(Serialize)]
 pub struct ResponseContainer<T: Serialize> {
@@ -39,48 +44,8 @@ pub struct ResponseContainer<T: Serialize> {
     value: T,
     #[serde(skip_serializing_if = "is_zero")]
     error_code: i32,
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn is_zero<T: Into<f64> + Copy>(num: &T) -> bool {
-    num.clone().into() == 0.
-}
-
-const STATIC_USER_ID: isize = 1;
-const FILE_SERVER_PREFIX: &str = "/file";
-const SONG_FILE_DIR: &str = "static/songs";
-
-pub mod character;
-pub mod download;
-pub mod info;
-pub mod score;
-pub mod sql_stmt;
-pub mod world;
-
-pub unsafe fn convert_double_pointer_to_vec(
-    data: &mut &mut c_char,
-    len: size_t,
-) -> Result<Vec<String>, Utf8Error> {
-    from_raw_parts(data, len)
-        .iter()
-        .map(|arg| CStr::from_ptr(*arg).to_str().map(ToString::to_string))
-        .collect()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn rust_main(
-    argc: c_int,
-    data: &mut &mut c_char,
-    _envp: &mut &mut c_char,
-) -> c_int {
-    let argv = convert_double_pointer_to_vec(data, argc as size_t);
-
-    if let Ok(argv) = argv {
-        start_serving(argv);
-        0
-    } else {
-        1
-    }
+    // #[serde(skip_serializing_if = "String::is_empty")]
+    // error_msg: String,
 }
 
 #[derive(StructOpt)]
@@ -93,7 +58,7 @@ pub struct Cli {
     #[structopt(short, long, default_value = "8080")]
     port: u16,
     // Path of data base file.
-    #[structopt(short, long = "db", default_value = "./ZrcaeaDB.db")]
+    #[structopt(short, long = "db", default_value = "./ZrcDB.db")]
     db_path: String,
 
     // Root directory of static files.
@@ -101,62 +66,54 @@ pub struct Cli {
     document_root: String,
 
     // Prefix for API
-    #[structopt(long, default_value = "/glad-you-came")]
+    #[structopt(long, default_value = "zrcaeasv")]
     prefix: String,
 }
 
-pub fn start_serving(argv: Vec<String>) {
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero<T: Into<f64> + Copy>(num: &T) -> bool {
+    num.clone().into() == 0.
+}
+
+pub async fn start_serving(argv: Vec<String>) {
     let cli = Cli::from_iter(argv.iter());
-    let mut database_config = HashMap::new();
-    let mut databases = HashMap::new();
-
-    database_config.insert("url", Value::from(cli.db_path));
-    databases.insert("zrc_db", Value::from(database_config));
-
     let hostname = format!("{}:{}", cli.address, cli.port);
+
+    let db_path = Path::new(&cli.db_path).canonicalize().unwrap();
+    let sqlite_connection_manager = SqliteConnectionManager::file(db_path);
+    let sqlite_pool = r2d2::Pool::new(sqlite_connection_manager)
+        .expect("Failed to create r2d2 SQLite connection pool");
+    let pool_arc = Arc::new(sqlite_pool);
 
     let document_root = Path::new(&cli.document_root).canonicalize().unwrap();
     env::set_current_dir(document_root).unwrap();
 
-    let config = Config::build(Environment::Development)
-        .address(cli.address)
-        .port(cli.port)
-        .log_level(LoggingLevel::Normal)
-        .extra("databases", databases)
-        .finalize()
-        .unwrap();
+    let routes = api::api_filter(pool_arc, hostname, cli.prefix);
+    warp::serve(routes).run(([192, 168, 100, 18], cli.port)).await;
+}
 
-    rocket::custom(config)
-        .manage(hostname)
-        .attach(crate::ZrcDB::fairing())
-        .mount(
-            crate::FILE_SERVER_PREFIX,
-            rocket_contrib::serve::StaticFiles::from(std::env::current_dir().unwrap()),
-        )
-        .mount(
-            &format!("{}{}", cli.prefix, "/"),
-            routes![
-                crate::info::login,
-                crate::info::aggregate,
-                crate::info::game_info,
-                crate::info::pack_info,
-                crate::info::user_info,
-                crate::download::get_download_list
-            ],
-        )
-        .mount(
-            &format!("{}{}", cli.prefix, "/user/me/character"),
-            routes![
-                crate::character::change_character,
-            ],
-        )
-        .mount(
-            &format!("{}{}", cli.prefix, "/user/me/characters"),
-            routes![crate::character::toggle_uncap],
-        )
-        .mount(
-            &format!("{}{}", cli.prefix, "/score"),
-            routes![crate::score::token, crate::score::score_upload],
-        )
-        .launch();
+pub unsafe fn convert_double_pointer_to_vec(
+    data: &mut &mut c_char,
+    len: size_t,
+) -> Result<Vec<String>, Utf8Error> {
+    from_raw_parts(data, len)
+        .iter()
+        .map(|arg| CStr::from_ptr(*arg).to_str().map(ToString::to_string))
+        .collect()
+}
+
+#[no_mangle]
+pub async unsafe extern "C" fn rust_main(
+    argc: c_int,
+    data: &mut &mut c_char,
+    _envp: &mut &mut c_char,
+) -> c_int {
+    let argv = convert_double_pointer_to_vec(data, argc as size_t);
+
+    if let Ok(argv) = argv {
+        start_serving(argv).await;
+        0
+    } else {
+        1
+    }
 }

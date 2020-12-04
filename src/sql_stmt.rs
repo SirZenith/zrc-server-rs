@@ -205,18 +205,31 @@ pub const REPLACE_RECENT_SCORE: &str = r#"
 
 pub const COMPUTE_RATING: &str = r#"
     with
-        recent as (
-            select rating
-            from  recent_score r, score s
-            where r.user_id = ?1
-                and r.is_recent_10 = 't'
-                and r.user_id = s.user_id
-                and r.played_date = s.played_date
-        )
+    best as (
+        select ROW_NUMBER () OVER ( 
+            order by rating desc
+        ) row_num,
+        rating
+        from  best_score b, score s
+        where b.user_id = ?1
+            and b.user_id = s.user_id
+            and b.played_date = s.played_date
+    ),
+    recent as (
+        select rating
+        from  recent_score r, score s
+        where r.user_id = ?1
+            and r.is_recent_10 = 't'
+            and r.user_id = s.user_id
+            and r.played_date = s.played_date
+    )
     select
-        round( (?2 + r10) / (?3 + r10_count) * 100 )
+        round((ifnull(b30, 0) + ifnull(r10, 0)) / (ifnull(b30_count, 1) + ifnull(r10_count, 1)) * 100)
     from (
-        select ifnull(sum(rating), 0) r10, ifnull(count(rating), 0) r10_count from recent
+        select sum(rating) b30, count(rating) b30_count from best
+        where row_num <= 30
+    ), (
+        select sum(rating) r10, count(rating) r10_count from recent
     )
 "#;
 
