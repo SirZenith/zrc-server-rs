@@ -17,7 +17,7 @@ pub async fn change_character(
         r#"{{"success": true,"value": {{"user_id": {}, "character": {}}}}}"#,
         STATIC_USER_ID, change_to.character
     );
-    respond(result, warp::http::StatusCode::OK)
+    Ok(warp::reply::with_status(result, warp::http::StatusCode::OK))
 }
 
 #[derive(Serialize)]
@@ -31,11 +31,12 @@ pub async fn toggle_uncap(
     part_id: isize,
     conn: DBAccessManager,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let stats = conn.get_char_statuses(STATIC_USER_ID, Some(part_id)).unwrap();
+    let user_id = STATIC_USER_ID;
+    let stats = conn.toggle_uncap(user_id, part_id).unwrap();
     let json = warp::reply::json(&ResponseContainer {
         success: true,
         value: ToggleResult {
-            user_id: STATIC_USER_ID,
+            user_id: user_id,
             character: stats,
         },
         error_code: 0,

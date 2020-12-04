@@ -1,9 +1,10 @@
 use super::*;
 
-pub mod character;
+mod character;
 pub mod download;
-pub mod info;
-pub mod score;
+mod info;
+mod score;
+mod save;
 
 fn respond<T: Serialize>(
     result: T,
@@ -67,7 +68,7 @@ fn get_download_list(
 fn change_character(
     pool: SqlitePool,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    warp::path!("user" / "me" / "characters")
+    warp::path!("user" / "me" / "character")
         .and(warp::post())
         .and(warp::body::form())
         .and(with_db_access_manager(pool))

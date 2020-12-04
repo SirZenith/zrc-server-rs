@@ -10,7 +10,6 @@ extern crate warp;
 
 pub mod api;
 pub mod data_access;
-pub mod sql_stmt;
 
 use std::collections::HashMap;
 use std::env;

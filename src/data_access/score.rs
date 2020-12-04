@@ -1,7 +1,7 @@
 use super::*;
 use std::time::SystemTime;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ScoreRecord {
     song_token: String,
     song_hash: String,
@@ -24,23 +24,23 @@ pub struct ScoreRecord {
 }
 
 impl ScoreRecord {
-    // fn new() -> Self {
-    //     ScoreRecord {
-    //         song_hash: String::new(),
-    //         song_token: String::new(),
-    //         song_id: String::new(),
-    //         difficulty: 0,
-    //         score: 0,
-    //         shiny: 0,
-    //         pure: 0,
-    //         far: 0,
-    //         lost: 0,
-    //         health: 0,
-    //         modifier: 0,
-    //         beyond_gauge: 0,
-    //         clear_type: 0,
-    //     }
-    // }
+    pub fn new() -> Self {
+        ScoreRecord {
+            song_hash: String::new(),
+            song_token: String::new(),
+            song_id: String::new(),
+            difficulty: 0,
+            score: 0,
+            shiny: 0,
+            pure: 0,
+            far: 0,
+            lost: 0,
+            health: 0,
+            modifier: 0,
+            beyond_gauge: 0,
+            clear_type: 0,
+        }
+    }
 
     fn score2rating(&self, tx: &rusqlite::Transaction) -> Result<f64, rusqlite::Error> {
         let base_rating: f64 = tx.query_row(
@@ -103,7 +103,10 @@ impl ScoreRecord {
         match result {
             Ok((score, played_date)) => {
                 if score < self.score {
-                    tx.execute(sql_stmt::UPDATE_BEST_SCORE, params![time_played, played_date])?;
+                    tx.execute(
+                        sql_stmt::UPDATE_BEST_SCORE,
+                        params![time_played, played_date],
+                    )?;
                 }
             }
             Err(e) => match e {
@@ -115,6 +118,7 @@ impl ScoreRecord {
         }
         Ok(())
     }
+
     fn update_recent_score(
         &self,
         tx: &rusqlite::Transaction,
@@ -159,6 +163,7 @@ impl ScoreRecord {
     }
 }
 
+#[derive(Debug)]
 struct RecentScoreItem {
     played_date: i64,
     rating: f64,
@@ -227,7 +232,7 @@ impl RecentScoreInserter {
                 if record.rating <= target.rating {
                     tx.execute(
                         sql_stmt::REPLACE_RECENT_SCORE,
-                        params![target.played_date, "t", user_id,  record.played_date],
+                        params![target.played_date, "t", user_id, record.played_date],
                     )?;
                     ret_target = Some(record);
                 } else {
@@ -240,7 +245,7 @@ impl RecentScoreInserter {
                     if r30_not_full {
                         tx.execute(
                             sql_stmt::INSERT_RECENT_SCORE,
-                        params![user_id, target.played_date, "t"],
+                            params![user_id, target.played_date, "t"],
                         )?;
                         // no need for further process, no target any more
                         ret_target = None;

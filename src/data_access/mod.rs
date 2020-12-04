@@ -4,6 +4,7 @@ mod game_info;
 mod pack_info;
 mod user;
 mod world;
+mod sql_stmt;
 pub mod score;
 
 use super::*;
@@ -162,7 +163,7 @@ impl DBAccessManager {
 
     pub fn toggle_uncap(&self, user_id: isize, part_id: isize) -> Result<CharacterStatses, rusqlite::Error> {
         let mut stmt = self.connection.prepare(sql_stmt::TOGGLE_UNCAP).unwrap();
-        stmt.execute(&[&STATIC_USER_ID, &part_id]).unwrap();
+        stmt.execute(params![STATIC_USER_ID, part_id]).unwrap();
         let stats = self.get_char_statuses(user_id, Some(part_id));
         stats
     }

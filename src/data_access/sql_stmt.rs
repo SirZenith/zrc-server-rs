@@ -233,14 +233,14 @@ pub const COMPUTE_RATING: &str = r#"
     )
 "#;
 
-pub const QUERY_BEST_RATING: &str = r#"
-    select rating
-    from  best_score b, score s
-    where b.user_id = ?1
-        and b.user_id = s.user_id
-        and b.played_date = s.played_date
-    order by rating desc;
-"#;
+// pub const QUERY_BEST_RATING: &str = r#"
+//     select rating
+//     from  best_score b, score s
+//     where b.user_id = ?1
+//         and b.user_id = s.user_id
+//         and b.played_date = s.played_date
+//     order by rating desc;
+// "#;
 
 pub const UPDATE_RATING: &str = r#"
     update player set rating = ?1 where user_id = ?2
