@@ -196,8 +196,16 @@ impl DBAccessManager {
         "nothing".to_string()
     }
 
-    pub fn score_upload(&mut self, score: ScoreRecord, user_id: isize) -> Result<ResponseContainer<HashMap<String, isize>>, rusqlite::Error> {
-        score::score_upload(self, score, user_id)
+    pub fn score_upload(&mut self, score: &ScoreRecord, user_id: isize, time: Option<&i64>) -> Result<ResponseContainer<HashMap<String, isize>>, rusqlite::Error> {
+        score::score_upload(self, score, user_id, time)
+    }
+
+    pub fn get_best_scores_with_iden(&self, user_id: isize) -> Result<HashMap<String, isize>, rusqlite::Error> {
+        score::get_best_scores_with_iden(self, user_id)
+    }
+
+    pub fn get_all_best_for_backup(&self, user_id: isize) -> Result<Vec<(ScoreRecord, i64)>, rusqlite::Error> {
+        score::get_all_best_for_backup(self, user_id)
     }
 }
 

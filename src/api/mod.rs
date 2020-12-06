@@ -3,8 +3,8 @@ use super::*;
 mod character;
 pub mod download;
 mod info;
-mod score;
 mod save;
+mod score;
 
 fn respond<T: Serialize>(
     result: T,
@@ -23,11 +23,18 @@ pub fn api_filter(
             .map(|| "Welcome to Zrcaea Server")
             .or(login(pool.clone()))
             .or(aggregate(pool.clone()))
+            .or(game_info(pool.clone()))
+            .or(pack_info(pool.clone()))
+            .or(present_me(pool.clone()))
+            .or(user_info(pool.clone()))
+            .or(world_map(pool.clone()))
             .or(get_download_list(pool.clone(), hostname.clone()))
             .or(change_character(pool.clone()))
             .or(toggle_uncap(pool.clone()))
             .or(score_token(pool.clone()))
-            .or(score_upload(pool.clone())),
+            .or(score_upload(pool.clone()))
+            .or(upload_backup_data(pool.clone()))
+            .or(download_backup_data(pool.clone())),
     )
 }
 
@@ -49,6 +56,56 @@ fn aggregate(
         .and(warp::query())
         .and(with_db_access_manager(pool))
         .and_then(info::aggregate)
+}
+
+// GET /game/info
+fn game_info(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("game" / "info")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(info::game_info)
+}
+
+// GET /purchase/bundle/pack
+fn pack_info(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("purchase" / "bundle" / "pack")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(info::pack_info)
+}
+
+// GET /present/me
+fn present_me(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("present" / "me")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(info::present_me)
+}
+
+// GET /user/info
+fn user_info(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("user" / "info")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(info::user_info)
+}
+
+// GET /world/map/me
+fn world_map(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("world" / "map" / "me")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(info::world_map)
 }
 
 // GET /serve/download/me/song?url&sid
@@ -90,9 +147,9 @@ fn score_token(
     pool: SqlitePool,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!["score" / "token"]
-    .and(warp::get())
-    .and(with_db_access_manager(pool))
-    .and_then(score::score_token)
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(score::score_token)
 }
 
 // POST score/song
@@ -100,8 +157,29 @@ fn score_upload(
     pool: SqlitePool,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!["score" / "song"]
-    .and(warp::post())
-    .and(warp::body::form())
-    .and(with_db_access_manager(pool))
-    .and_then(score::score_upload)
+        .and(warp::post())
+        .and(warp::body::form())
+        .and(with_db_access_manager(pool))
+        .and_then(score::score_upload)
+}
+
+// POST /user/me/save
+fn upload_backup_data(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("user" / "me" / "save")
+        .and(warp::post())
+        .and(warp::body::form())
+        .and(with_db_access_manager(pool))
+        .and_then(save::upload_backup_data)
+}
+
+// GET /user/me/save
+fn download_backup_data(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("user" / "me" / "save")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(save::download_backup_data)
 }

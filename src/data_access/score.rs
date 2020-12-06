@@ -1,26 +1,30 @@
 use super::*;
 use std::time::SystemTime;
 
+const GRADE_STEPS: [isize; 7] = [
+    0, 8_600_000, 8_900_000, 9_200_000, 9_500_000, 9_800_000, 9_900_000,
+];
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScoreRecord {
     song_token: String,
     song_hash: String,
-    song_id: String,
-    difficulty: i8,
-    score: isize,
+    pub song_id: String,
+    pub difficulty: i8,
+    pub score: isize,
     #[serde(rename = "shiny_perfect_count")]
-    shiny: isize,
+    pub shiny: isize,
     #[serde(rename = "perfect_count")]
-    pure: isize,
+    pub pure: isize,
     #[serde(rename = "near_count")]
-    far: isize,
+    pub far: isize,
     #[serde(rename = "miss_count")]
-    lost: isize,
-    health: i8,
-    modifier: isize,
+    pub lost: isize,
+    pub health: i8,
+    pub modifier: isize,
     #[serde(skip_serializing_if = "is_zero")]
     beyond_gauge: i32,
-    clear_type: i8,
+    pub clear_type: i8,
 }
 
 impl ScoreRecord {
@@ -40,6 +44,18 @@ impl ScoreRecord {
             beyond_gauge: 0,
             clear_type: 0,
         }
+    }
+
+    pub fn score2grade(&self) -> u8 {
+        let mut grade = -1;
+        for step in GRADE_STEPS.iter() {
+            if self.score >= *step {
+                grade += 1
+            } else {
+                break;
+            }
+        }
+        grade as u8
     }
 
     fn score2rating(&self, tx: &rusqlite::Transaction) -> Result<f64, rusqlite::Error> {
@@ -365,8 +381,9 @@ impl RecentScoreInserter {
 
 pub fn score_upload(
     conn: &mut DBAccessManager,
-    score_record: ScoreRecord,
+    score_record: &ScoreRecord,
     user_id: isize,
+    time: Option<&i64>,
 ) -> Result<ResponseContainer<HashMap<String, isize>>, rusqlite::Error> {
     let mut result = ResponseContainer {
         success: true,
@@ -375,10 +392,16 @@ pub fn score_upload(
     };
     let tx = conn.connection.transaction()?;
     let rating = score_record.score2rating(&tx)?;
-    let time_played = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let time_played: i64;
+    match time {
+        Some(t) => time_played = *t,
+        None => {
+            time_played = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+        }
+    }
     score_record.insert_score_record(&tx, user_id, time_played, rating)?;
     score_record.update_best_score(&tx, user_id, time_played)?;
     score_record.update_recent_score(&tx, user_id, time_played, rating)?;
@@ -398,4 +421,51 @@ fn update_player_rating(
     stmt.execute(params![rating, user_id])?;
 
     Ok(rating as isize)
+}
+
+pub fn get_best_scores_with_iden(
+    conn: &DBAccessManager,
+    user_id: isize,
+) -> Result<HashMap<String, isize>, rusqlite::Error> {
+    let mut scores = HashMap::new();
+    let mut stmt = conn
+        .connection
+        .prepare(sql_stmt::QUERY_BEST_SCORE_WITH_IDEN)
+        .unwrap();
+    let results = stmt
+        .query_map(params![user_id], |row| {
+            Ok((row.get("iden")?, row.get("score")?))
+        })
+        .unwrap();
+
+    for score in results {
+        let score = score.unwrap();
+        scores.insert(score.0, score.1);
+    }
+    Ok(scores)
+}
+
+pub fn get_all_best_for_backup(
+    conn: &DBAccessManager,
+    user_id: isize,
+) -> Result<Vec<(ScoreRecord, i64)>, rusqlite::Error> {
+    let mut stmt = conn
+        .connection
+        .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_BACKUP)
+        .unwrap();
+    let results = stmt.query_map(params![user_id], |row| {
+        let mut record = ScoreRecord::new();
+        record.song_id = row.get("song_id")?;
+        record.difficulty = row.get("difficluty")?;
+        record.score = row.get("score")?;
+        record.shiny = row.get("shiny_pure")?;
+        record.pure = row.get("pure")?;
+        record.far = row.get("far")?;
+        record.lost = row.get("lost")?;
+        record.health = row.get("health")?;
+        record.modifier = row.get("modifier")?;
+        record.clear_type = row.get("clear_type")?;
+        Ok((record, row.get("played_date")?))
+    }).unwrap();
+    Ok(results.into_iter().map(|x| x.unwrap()).collect())
 }

@@ -233,14 +233,34 @@ pub const COMPUTE_RATING: &str = r#"
     )
 "#;
 
-// pub const QUERY_BEST_RATING: &str = r#"
-//     select rating
-//     from  best_score b, score s
-//     where b.user_id = ?1
-//         and b.user_id = s.user_id
-//         and b.played_date = s.played_date
-//     order by rating desc;
-// "#;
+pub const QUERY_BEST_SCORE_WITH_IDEN: &str = r#"
+    select
+        s.score, (s.song_id || s.dificulty) as iden
+    from
+        best_score b, score s
+    where b.user_id = ?1
+        and b.user_id = s.user_id
+        and b.played_date = s.played_date;
+"#;
+
+pub const QUERY_BEST_SCORE_FOR_BACKUP: &str = r#"
+    select
+        s.song_id,
+        s.difficulty,
+        s.score,
+        s.shiny_pure,
+        s.pure,
+        s.far,
+        s.lost,
+        s.health,
+        ifnull(s.modifier, 0),
+        s.clear_type,
+    from
+        best_score b, score s
+    where b.user_id = ?1
+        and b.user_id = s.user_id
+        and b.played_date = s.played_date;
+"#;
 
 pub const UPDATE_RATING: &str = r#"
     update player set rating = ?1 where user_id = ?2

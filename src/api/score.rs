@@ -17,6 +17,6 @@ pub async fn score_upload(
     mut conn: DBAccessManager,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let user_id = STATIC_USER_ID;
-    respond(conn.score_upload(score_record, user_id).unwrap(), warp::http::StatusCode::OK)
+    respond(conn.score_upload(&score_record, user_id, None).unwrap(), warp::http::StatusCode::OK)
 }
 
