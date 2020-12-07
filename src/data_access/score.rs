@@ -456,7 +456,7 @@ pub fn get_all_best_for_backup(
     let results = stmt.query_map(params![user_id], |row| {
         let mut record = ScoreRecord::new();
         record.song_id = row.get("song_id")?;
-        record.difficulty = row.get("difficluty")?;
+        record.difficulty = row.get("difficulty")?;
         record.score = row.get("score")?;
         record.shiny = row.get("shiny_pure")?;
         record.pure = row.get("pure")?;

@@ -6,6 +6,7 @@ mod user;
 mod world;
 mod sql_stmt;
 pub mod score;
+pub mod save;
 
 use super::*;
 use character::*;

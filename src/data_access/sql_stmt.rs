@@ -235,7 +235,7 @@ pub const COMPUTE_RATING: &str = r#"
 
 pub const QUERY_BEST_SCORE_WITH_IDEN: &str = r#"
     select
-        s.score, (s.song_id || s.dificulty) as iden
+        s.score, (s.song_id || s.difficulty) as iden
     from
         best_score b, score s
     where b.user_id = ?1
@@ -253,8 +253,9 @@ pub const QUERY_BEST_SCORE_FOR_BACKUP: &str = r#"
         s.far,
         s.lost,
         s.health,
-        ifnull(s.modifier, 0),
+        ifnull(s.modifier, 0) modifier,
         s.clear_type,
+        s.played_date
     from
         best_score b, score s
     where b.user_id = ?1
@@ -307,4 +308,23 @@ pub const MAP_REWARD: &str = r#"
 		map_reward
 	where
 		map_id = ?
+"#;
+
+// save
+// ============================================================================
+pub const QUERY_BACKUP_DATA: &str = r#"
+    select
+        version,
+        unlocklist,
+        installid,
+        devicemodel_name,
+        story,
+        create_at
+    from
+        data_backup
+    where user_id = ?1;
+"#;
+
+pub const INSERT_OTHER_BACKUP: &str = r#"
+    replace into data_backup values(?1, ?2, ?3, ?4, ?5, ?6, ?7);
 "#;
