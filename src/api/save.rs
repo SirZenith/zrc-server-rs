@@ -7,6 +7,7 @@ pub async fn upload_backup_data(
     mut conn: DBAccessManager,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let user_id = STATIC_USER_ID;
+    // println!("{}", serde_json::to_string(&data).unwrap());
     data.update_score_on_cloud(&mut conn, user_id).unwrap();
     data.insert_other_data(&conn, user_id).unwrap();
     let mut result = HashMap::new();

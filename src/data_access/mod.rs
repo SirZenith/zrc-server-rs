@@ -121,7 +121,7 @@ impl DBAccessManager {
                     checksum.audio.insert(
                         "url".to_string(),
                         format!(
-                            "http://{}{}/{}/{}/{}",
+                            "http://{}/{}/{}/{}/{}",
                             hostname, FILE_SERVER_PREFIX, SONG_FILE_DIR, item.song_id, "base.ogg"
                         ),
                     );
@@ -137,7 +137,7 @@ impl DBAccessManager {
                     entry.insert(
                         "url".to_string(),
                         format!(
-                            "http://{}{}/{}/{}/{}.aff",
+                            "http://{}/{}/{}/{}/{}.aff",
                             hostname,
                             FILE_SERVER_PREFIX,
                             SONG_FILE_DIR,
@@ -205,8 +205,19 @@ impl DBAccessManager {
         score::get_best_scores_with_iden(self, user_id)
     }
 
-    pub fn get_all_best_for_backup(&self, user_id: isize) -> Result<Vec<(ScoreRecord, i64)>, rusqlite::Error> {
-        score::get_all_best_for_backup(self, user_id)
+    pub fn get_all_best_scores(&self, user_id: isize) -> Result<Vec<(ScoreRecord, i64)>, rusqlite::Error> {
+        score::get_all_best_scores(self, user_id)
+    }
+
+    pub fn score_lookup(&self, user_id: isize) -> Result<Vec<ScoreLookup>, rusqlite::Error> {
+        score::score_lookup(self, user_id)
+    }
+
+    pub fn get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), rusqlite::Error> {
+        let mut stmt = self.connection.prepare(sql_stmt::COMPUTE_R10_AND_B30).unwrap();
+        stmt.query_row(params![user_id], |row| {
+            Ok((row.get::<&str, f64>("r10")?, row.get::<&str, f64>("b30")?))
+        })
     }
 }
 

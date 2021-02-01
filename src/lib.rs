@@ -1,4 +1,7 @@
 extern crate libc;
+extern crate askama;
+#[macro_use]
+extern crate lazy_static;
 extern crate r2d2;
 extern crate r2d2_sqlite;
 #[macro_use]
@@ -13,6 +16,7 @@ pub mod data_access;
 
 use std::collections::HashMap;
 use std::env;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -34,7 +38,7 @@ use warp::Filter;
 use data_access::*;
 
 const STATIC_USER_ID: isize = 1;
-const FILE_SERVER_PREFIX: &str = "/file";
+const FILE_SERVER_PREFIX: &str = "file";
 const SONG_FILE_DIR: &str = "static/songs";
 
 #[derive(Serialize)]
@@ -49,10 +53,13 @@ pub struct ResponseContainer<T: Serialize> {
 
 #[derive(StructOpt)]
 pub struct Cli {
-    // Address of server instance.
+    // IP address of server instance.
     #[structopt(short, long, default_value = "127.0.0.1")]
-    address: String,
+    ip: String,
 
+    // Hostname of server instance.
+    #[structopt(short, long, default_value = "localhost")]
+    hostname: String,
     // Port number used by server.
     #[structopt(short, long, default_value = "8080")]
     port: u16,
@@ -63,10 +70,10 @@ pub struct Cli {
     // Root directory of static files.
     #[structopt(short = "r", long = "root", default_value = "./")]
     document_root: String,
-
+    
     // Prefix for API
-    #[structopt(long, default_value = "zrcaeasv")]
-    prefix: String,
+    // #[structopt(long, default_value = "")]
+    // prefix: String,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -76,7 +83,17 @@ fn is_zero<T: Into<f64> + Copy>(num: &T) -> bool {
 
 pub async fn start_serving(argv: Vec<String>) {
     let cli = Cli::from_iter(argv.iter());
-    let hostname = format!("{}:{}", cli.address, cli.port);
+    let socket_addr = format!("{}:{}", cli.ip, cli.port);
+    let socket_addr = match socket_addr.parse::<SocketAddr>() {
+        Ok(s) => s,
+        Err(e) => {
+            println!(
+                "Wrong hostname with IP: {}, Port: {}\n\t{}",
+                cli.ip, cli.port, e
+            );
+            return;
+        }
+    };
 
     let db_path = Path::new(&cli.db_path).canonicalize().unwrap();
     let sqlite_connection_manager = SqliteConnectionManager::file(db_path);
@@ -85,10 +102,13 @@ pub async fn start_serving(argv: Vec<String>) {
     let pool_arc = Arc::new(sqlite_pool);
 
     let document_root = Path::new(&cli.document_root).canonicalize().unwrap();
+    println!("Setting document root path at: {:?}", document_root.as_os_str());
     env::set_current_dir(document_root).unwrap();
 
-    let routes = api::api_filter(pool_arc, hostname, cli.prefix);
-    warp::serve(routes).run(([192, 168, 100, 18], cli.port)).await;
+    let file_server = warp::path(FILE_SERVER_PREFIX).and(warp::fs::dir("./"));
+    let routes = api::api_filter(pool_arc, cli.hostname);
+    let routes = routes.or(file_server);
+    warp::serve(routes).run(socket_addr).await;
 }
 
 pub unsafe fn convert_double_pointer_to_vec(

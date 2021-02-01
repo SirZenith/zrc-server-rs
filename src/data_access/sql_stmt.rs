@@ -263,6 +263,64 @@ pub const QUERY_BEST_SCORE_FOR_BACKUP: &str = r#"
         and b.played_date = s.played_date;
 "#;
 
+pub const COMPUTE_R10_AND_B30: &str = r#"
+    with
+    best as (
+        select ROW_NUMBER () OVER ( 
+            order by rating desc
+        ) row_num,
+        rating
+        from  best_score b, score s
+        where b.user_id = ?1
+            and b.user_id = s.user_id
+            and b.played_date = s.played_date
+    ),
+    recent as (
+        select rating
+        from  recent_score r, score s
+        where r.user_id = ?1
+            and r.is_recent_10 = 't'
+            and r.user_id = s.user_id
+            and r.played_date = s.played_date
+    )
+    select
+        ifnull(b30, 0) / ifnull(b30_count, 1) b30, ifnull(r10, 0) / ifnull(r10_count, 1) r10
+    from (
+        select sum(rating) b30, count(rating) b30_count from best
+        where row_num <= 30
+    ), (
+        select sum(rating) r10, count(rating) r10_count from recent
+    )
+"#;
+
+pub const QUERY_BEST_SCORE_FOR_LOOKUP: &str = r#"
+    select
+        case
+            when trim(song.title_local_jp) != '' then song.title_local_jp
+            else song.title_local_en
+        end as title,
+        s.difficulty,
+        s.score,
+        s.shiny_pure,
+        s.pure,
+        s.far,
+        s.lost,
+        s.clear_type,
+        s.played_date,
+        s.rating rating,
+        c.rating base_rating
+    from
+        best_score b, score s, song, chart_info c
+    where b.user_id = ?1
+        and b.user_id = s.user_id
+        and b.played_date = s.played_date
+        and s.song_id = song.song_id
+        and s.song_id = c.song_id
+        and s.difficulty = c.difficulty
+    order by
+        rating desc;
+"#;
+
 pub const UPDATE_RATING: &str = r#"
     update player set rating = ?1 where user_id = ?2
 "#;

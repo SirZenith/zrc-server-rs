@@ -8,7 +8,7 @@ BUILD_VERSION=$1
 TOOL_NAME=$2
 PROJ_ROOT=$(pwd)
 MAKE_PATH=$PROJ_ROOT/theos_code
-LIB_PATH=$PROJ_ROOT/target/aarch64-apple-ios/$BUILD_VERSION
+LIB_PATH=$PROJ_ROOT/target/aarch64-apple-ios
 LIB_NAME=lib$TOOL_NAME.a
 
 mkdir -p $LIB_PATH
@@ -20,7 +20,7 @@ else
     cargo build --lib --target=aarch64-apple-ios
 fi
 
-if [ ! -f $LIB_PATH/$LIB_NAME ]; then
+if [ ! -f $LIB_PATH/$LIB_NAME ] && [ ! -f $LIB_PATH/$BUILD_VERSION/$LIB_NAME ]; then
     echo "failed to build darwin/arm64 static lib!"
     exit 1
 fi

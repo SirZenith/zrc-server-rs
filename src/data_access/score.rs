@@ -5,6 +5,43 @@ const GRADE_STEPS: [isize; 7] = [
     0, 8_600_000, 8_900_000, 9_200_000, 9_500_000, 9_800_000, 9_900_000,
 ];
 
+pub struct ScoreLookup {
+    pub title: String,
+    pub difficulty: &'static str,
+    pub score: isize,
+    pub shiny: isize,
+    pub pure: isize,
+    pub far: isize,
+    pub lost: isize,
+    pub clear_type: &'static str,
+    pub rating: f64,
+    pub base_rating: f64,
+    pub played_date: i64,
+}
+
+impl ScoreLookup {
+    pub fn get_clear_type(clear_type: i8) -> &'static str {
+        lazy_static! {
+            static ref CLEAR_TYPES: [&'static str; 6] = [
+                "track-lost",
+                "normal-clear",
+                "full-recall",
+                "pure-memory",
+                "easy-clear",
+                "hard-clear",
+            ];
+        };
+        CLEAR_TYPES[clear_type as usize]
+    }
+
+    pub fn get_diff_str(difficulty: i8) -> &'static str {
+        lazy_static! {
+            static ref DIFFS: [&'static str; 4] = ["PST", "PRS", "FTR", "BYD"];
+        }
+        DIFFS[difficulty as usize]
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScoreRecord {
     song_token: String,
@@ -58,7 +95,7 @@ impl ScoreRecord {
         grade as u8
     }
 
-    fn score2rating(&self, tx: &rusqlite::Transaction) -> Result<f64, rusqlite::Error> {
+    fn score2rating(&self, tx: &PooledSqlite) -> Result<f64, rusqlite::Error> {
         let base_rating: f64 = tx.query_row(
             sql_stmt::BASE_RATING,
             params![self.song_id, self.difficulty],
@@ -390,8 +427,8 @@ pub fn score_upload(
         value: HashMap::new(),
         error_code: 0,
     };
+    let rating = score_record.score2rating(&conn.connection)?;
     let tx = conn.connection.transaction()?;
-    let rating = score_record.score2rating(&tx)?;
     let time_played: i64;
     match time {
         Some(t) => time_played = *t,
@@ -445,7 +482,7 @@ pub fn get_best_scores_with_iden(
     Ok(scores)
 }
 
-pub fn get_all_best_for_backup(
+pub fn get_all_best_scores(
     conn: &DBAccessManager,
     user_id: isize,
 ) -> Result<Vec<(ScoreRecord, i64)>, rusqlite::Error> {
@@ -453,19 +490,50 @@ pub fn get_all_best_for_backup(
         .connection
         .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_BACKUP)
         .unwrap();
-    let results = stmt.query_map(params![user_id], |row| {
-        let mut record = ScoreRecord::new();
-        record.song_id = row.get("song_id")?;
-        record.difficulty = row.get("difficulty")?;
-        record.score = row.get("score")?;
-        record.shiny = row.get("shiny_pure")?;
-        record.pure = row.get("pure")?;
-        record.far = row.get("far")?;
-        record.lost = row.get("lost")?;
-        record.health = row.get("health")?;
-        record.modifier = row.get("modifier")?;
-        record.clear_type = row.get("clear_type")?;
-        Ok((record, row.get("played_date")?))
-    }).unwrap();
+    let results = stmt
+        .query_map(params![user_id], |row| {
+            let mut record = ScoreRecord::new();
+            record.song_id = row.get("song_id")?;
+            record.difficulty = row.get("difficulty")?;
+            record.score = row.get("score")?;
+            record.shiny = row.get("shiny_pure")?;
+            record.pure = row.get("pure")?;
+            record.far = row.get("far")?;
+            record.lost = row.get("lost")?;
+            record.health = row.get("health")?;
+            record.modifier = row.get("modifier")?;
+            record.clear_type = row.get("clear_type")?;
+            Ok((record, row.get("played_date")?))
+        })
+        .unwrap();
+    Ok(results.into_iter().map(|x| x.unwrap()).collect())
+}
+
+pub fn score_lookup(
+    conn: &DBAccessManager,
+    user_id: isize,
+) -> Result<Vec<ScoreLookup>, rusqlite::Error> {
+    let mut stmt = conn
+        .connection
+        .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_LOOKUP)
+        .unwrap();
+    let results = stmt
+        .query_map(params![user_id], |row| {
+            let record = ScoreLookup {
+                title: row.get("title")?,
+                difficulty: ScoreLookup::get_diff_str(row.get("difficulty")?),
+                score: row.get("score")?,
+                shiny: row.get("shiny_pure")?,
+                pure: row.get("pure")?,
+                far: row.get("far")?,
+                lost: row.get("lost")?,
+                clear_type: ScoreLookup::get_clear_type(row.get("clear_type")?),
+                played_date: row.get("played_date")?,
+                rating: row.get("rating")?,
+                base_rating: row.get("base_rating")?,
+            };
+            Ok(record)
+        })
+        .unwrap();
     Ok(results.into_iter().map(|x| x.unwrap()).collect())
 }

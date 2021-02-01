@@ -277,7 +277,7 @@ impl BackupData {
         let score_data = self.scores.get_mut("").unwrap();
         let lamp_data = self.clearlamps.get_mut("").unwrap();
         let cleared_song_data = self.clearedsongs.get_mut("").unwrap();
-        let records_and_time = conn.get_all_best_for_backup(user_id).unwrap();
+        let records_and_time = conn.get_all_best_scores(user_id).unwrap();
         for (record, time) in records_and_time {
             score_data.push(ScoreData::from_record_time(&record, time));
             lamp_data.push(ClearLampData::from_record(&record));

@@ -25,8 +25,8 @@ pub struct AggregateCall {
 // GET /auth/login
 pub async fn login(_: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
     let result = LoginToken {
-        access_token: String::new(),
-        token_type: String::new(),
+        access_token: "nothing".to_string(),
+        token_type: "Bear".to_string(),
         success: true,
         error_code: 0,
     };

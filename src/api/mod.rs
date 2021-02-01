@@ -16,26 +16,24 @@ fn respond<T: Serialize>(
 pub fn api_filter(
     pool: SqlitePool,
     hostname: String,
-    api_prefix: String,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    warp::path(api_prefix).and(
-        warp::path("welcome")
-            .map(|| "Welcome to Zrcaea Server")
-            .or(login(pool.clone()))
-            .or(aggregate(pool.clone()))
-            .or(game_info(pool.clone()))
-            .or(pack_info(pool.clone()))
-            .or(present_me(pool.clone()))
-            .or(user_info(pool.clone()))
-            .or(world_map(pool.clone()))
-            .or(get_download_list(pool.clone(), hostname.clone()))
-            .or(change_character(pool.clone()))
-            .or(toggle_uncap(pool.clone()))
-            .or(score_token(pool.clone()))
-            .or(score_upload(pool.clone()))
-            .or(upload_backup_data(pool.clone()))
-            .or(download_backup_data(pool.clone())),
-    )
+    warp::path("welcome")
+        .map(|| "Welcome to Zrcaea Server")
+        .or(login(pool.clone()))
+        .or(aggregate(pool.clone()))
+        .or(game_info(pool.clone()))
+        .or(pack_info(pool.clone()))
+        .or(present_me(pool.clone()))
+        .or(user_info(pool.clone()))
+        .or(world_map(pool.clone()))
+        .or(get_download_list(pool.clone(), hostname.clone()))
+        .or(change_character(pool.clone()))
+        .or(toggle_uncap(pool.clone()))
+        .or(score_token(pool.clone()))
+        .or(score_upload(pool.clone()))
+        .or(score_lookup(pool.clone()))
+        .or(upload_backup_data(pool.clone()))
+        .or(download_backup_data(pool.clone()))
 }
 
 // GET /auth/login
@@ -161,6 +159,16 @@ fn score_upload(
         .and(warp::body::form())
         .and(with_db_access_manager(pool))
         .and_then(score::score_upload)
+}
+
+// GET /score/:user_id
+fn score_lookup(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!["score" / isize]
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(score::score_lookup)
 }
 
 // POST /user/me/save

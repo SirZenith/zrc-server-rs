@@ -58,7 +58,6 @@ if [ $BUILD_LIB -eq 1 ]; then
     fi
 fi
 
-
 if [ $BUILD_PACKAGE -eq 1 ]; then
     cd $PROJ_ROOT/theos_code
     if [ $RELEASE_BUILD -eq 1 ]; then
