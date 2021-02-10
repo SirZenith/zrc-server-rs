@@ -219,13 +219,13 @@ impl DBAccessManager {
                 audio: InfoItem::new(),
                 chart: HashMap::new(),
             });
-            if item.song_dl {
+            if item.song_dl && !item.audio_checksum.is_empty() {
                 info.audio.checksum = item.audio_checksum.clone();
                 if need_url {
                     info.audio.url = item.song_dl_url(hostname);
                 }
             }
-            if item.chart_dl {
+            if item.chart_dl && !item.chart_checksum.is_empty() {
                 let entry = info
                     .chart
                     .entry(item.difficulty.clone())
