@@ -373,6 +373,11 @@ impl DBAccessManager {
         char_id: isize,
         skill_sealed: bool,
     ) -> Result<usize, rusqlite::Error> {
+        let skill_sealed = if skill_sealed {
+            "t"
+        } else {
+            "f"
+        };
         self.connection.execute(
             sql_stmt::CHANGE_CHARACTER,
             params![char_id, skill_sealed, user_id],
