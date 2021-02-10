@@ -1,5 +1,5 @@
 use super::*;
-use crate::data_access::score::ScoreLookup;
+use crate::data_access::LookupedScore;
 
 use askama::Template;
 
@@ -16,7 +16,7 @@ pub async fn score_token(pool: DBAccessManager) -> Result<impl warp::Reply, warp
 
 // POST /score/song
 pub async fn score_upload(
-    score_record: data_access::score::ScoreRecord,
+    score_record: data_access::ScoreRecord,
     mut conn: DBAccessManager,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let user_id = STATIC_USER_ID;
@@ -31,7 +31,7 @@ pub async fn score_upload(
 struct RecordsTemplate {
     r10: f64,
     b30: f64,
-    records: Vec<ScoreLookup>,
+    records: Vec<LookupedScore>,
 }
 
 // GET /score/:user_id

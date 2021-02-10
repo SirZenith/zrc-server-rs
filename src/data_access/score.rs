@@ -5,7 +5,7 @@ const GRADE_STEPS: [isize; 7] = [
     0, 8_600_000, 8_900_000, 9_200_000, 9_500_000, 9_800_000, 9_900_000,
 ];
 
-pub struct ScoreLookup {
+pub struct LookupedScore {
     pub title: String,
     pub difficulty: &'static str,
     pub score: isize,
@@ -19,7 +19,7 @@ pub struct ScoreLookup {
     pub played_date: i64,
 }
 
-impl ScoreLookup {
+impl LookupedScore {
     pub fn get_clear_type(clear_type: i8) -> &'static str {
         lazy_static! {
             static ref CLEAR_TYPES: [&'static str; 6] = [
@@ -512,22 +512,22 @@ pub fn get_all_best_scores(
 pub fn score_lookup(
     conn: &DBAccessManager,
     user_id: isize,
-) -> Result<Vec<ScoreLookup>, rusqlite::Error> {
+) -> Result<Vec<LookupedScore>, rusqlite::Error> {
     let mut stmt = conn
         .connection
         .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_LOOKUP)
         .unwrap();
     let results = stmt
         .query_map(params![user_id], |row| {
-            let record = ScoreLookup {
+            let record = LookupedScore {
                 title: row.get("title")?,
-                difficulty: ScoreLookup::get_diff_str(row.get("difficulty")?),
+                difficulty: LookupedScore::get_diff_str(row.get("difficulty")?),
                 score: row.get("score")?,
                 shiny: row.get("shiny_pure")?,
                 pure: row.get("pure")?,
                 far: row.get("far")?,
                 lost: row.get("lost")?,
-                clear_type: ScoreLookup::get_clear_type(row.get("clear_type")?),
+                clear_type: LookupedScore::get_clear_type(row.get("clear_type")?),
                 played_date: row.get("played_date")?,
                 rating: row.get("rating")?,
                 base_rating: row.get("base_rating")?,

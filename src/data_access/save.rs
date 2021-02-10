@@ -152,7 +152,7 @@ impl BackupData {
         data
     }
 
-    pub fn insert_other_data(
+    pub fn insert_game_progress(
         &self,
         conn: &DBAccessManager,
         user_id: isize,
@@ -239,7 +239,7 @@ impl BackupData {
 }
 
 impl BackupData {
-    pub fn get_other_data(&mut self, conn: &DBAccessManager, user_id: isize) -> bool {
+    pub fn get_game_progress(&mut self, conn: &DBAccessManager, user_id: isize) -> bool {
         let mut stmt = conn
             .connection
             .prepare(sql_stmt::QUERY_BACKUP_DATA)

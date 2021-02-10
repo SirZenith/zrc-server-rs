@@ -9,7 +9,7 @@ pub async fn upload_backup_data(
     let user_id = STATIC_USER_ID;
     // println!("{}", serde_json::to_string(&data).unwrap());
     data.update_score_on_cloud(&mut conn, user_id).unwrap();
-    data.insert_other_data(&conn, user_id).unwrap();
+    data.insert_game_progress(&conn, user_id).unwrap();
     let mut result = HashMap::new();
     result.insert("user_id", user_id);
     respond(
@@ -28,7 +28,7 @@ pub async fn download_backup_data(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let user_id = STATIC_USER_ID;
     let mut data = BackupData::new_with_id(user_id);
-    match data.get_other_data(&conn, user_id) {
+    match data.get_game_progress(&conn, user_id) {
         false => Ok(warp::reply::with_status(
             r#"{"success":false,"error_code":402}"#.to_string(),
             warp::http::StatusCode::NOT_FOUND,

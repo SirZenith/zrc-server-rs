@@ -1,7 +1,8 @@
 use super::*;
+use super::data_access::DLRequest;
 
 mod character;
-pub mod download;
+mod download;
 mod info;
 mod save;
 mod score;
@@ -114,7 +115,7 @@ fn get_download_list(
     warp::path!("serve" / "download" / "me" / "song")
         .and(warp::get())
         .map(move || hostname.clone())
-        .and(warp::query::<download::DLRequest>())
+        .and(warp::query::<DLRequest>())
         .and(with_db_access_manager(pool))
         .and_then(download::get_download_list)
 }

@@ -23,7 +23,7 @@ pub async fn change_character(
 #[derive(Serialize)]
 pub struct ToggleResult {
     user_id: isize,
-    character: data_access::character::CharacterStatses,
+    character: data_access::CharacterStatses,
 }
 
 // POST /user/me/characters/<part_id>/toggle_uncap
