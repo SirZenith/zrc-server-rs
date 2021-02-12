@@ -406,12 +406,16 @@ impl DBAccessManager {
 
 // ----------------------------------------------------------------------------
 mod info;
-use info::{UserInfo, PackInfo, GameInfo, MapInfoList};
+use info::{UserInfo, UserInfoForScoreLookup, PackInfo, GameInfo, MapInfoList};
 
 /// Getting basic info for user log in.
 impl DBAccessManager {
     pub fn get_user_info(&self, user_id: isize) -> Result<UserInfo, rusqlite::Error> {
         UserInfo::new(&self, user_id)
+    }
+
+    pub fn get_minimum_user_info(&self, user_id: isize) -> Result<UserInfoForScoreLookup, rusqlite::Error> {
+        UserInfoForScoreLookup::new(&self, user_id)
     }
 
     pub fn get_game_info(&self) -> Result<GameInfo, rusqlite::Error> {

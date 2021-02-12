@@ -21,7 +21,7 @@
         body {
             margin: 2em auto;
             padding: 2em 0.5em;
-            max-width: 600px;
+            max-width: 900px;
             font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
             font-size: 1rem;
             font-weight: 400;
@@ -196,37 +196,192 @@
             background-color: #28a745;
         }
     </style>
+
+    <style>
+        @font-face {
+            font-family: Exo;
+            src: url("./Exo-Semibold.ttf");
+        }
+
+        @font-face {
+            font-family: GeosansLight;
+            src: url("./GeosansLight.ttf")
+        }
+
+        .user-info-card {
+            position: relative;
+            width: 60vw;
+            /* keeping aspect ratio */
+            padding-bottom: 36vw;
+            /* border: 1px dashed black; */
+            margin-bottom: 3em;
+        }
+
+        .logo {
+            position: absolute;
+            width: 15%;
+            top: 33%;
+            left: 8%;
+        }
+
+        .info-panel {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .card-overlay {
+            position: absolute;
+            top: 26%;
+            left: 3.8%;
+            width: 98%;
+            /* z-index: -10px; */
+        }
+
+        .card-background {
+            position: absolute;
+            top: 30.42%;
+            left: 6.43%;
+            width: 93.57%;
+            height: 47.3%;
+            background-image: url("4.jpg");
+            background-position: 0% 60%;
+            background-attachment: fixed;
+            border-radius: 6px;
+            /* z-index: -20; */
+        }
+
+        .info-rating {
+            position: absolute;
+            top: 58%;
+            left: 8.2%;
+            width: 5%;
+            padding-bottom: 5%;
+            background-image: url("rating_4.jpg");
+            background-color: transparent;
+        }
+
+        .rating-text {
+            position: absolute;
+            top: 12%;
+            left: 4%;
+            font-family: Exo;
+            font-weight: 900;
+            color: white;
+            text-shadow: 0.2vw 0.2vw 0.4vw #51485b;
+        }
+
+        .rating-integral {
+            font-size: 1.4vw;
+            font-weight: bold;
+        }
+
+        .rating-fractional {
+            font-size: 0.8vw;
+            font-weight: bold;
+        }
+
+        .rating-badge {
+            position: absolute;
+            width: 100%;
+        }
+
+        .info-name {
+            position: absolute;
+            top: 57.5%;
+            left: 14.24%;
+            font-family: GeosansLight;
+            font-size: 1.6vw;
+        }
+        
+        .info-id {
+            position: absolute;
+            top: 62.5%;
+            left: 14.4%;
+            font-family: Exo;
+            font-size: 0.7vw;
+        }
+
+        .rating-detail {
+            position: absolute;
+            top: 67%;
+            left: 14.4%;
+            font-family: "苹方-简";
+            font-size: 1vw;
+            font-weight: 200;
+            color: white;
+        }
+
+        .character-panel {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .character-stand-alone {
+            position: absolute;
+            top: 3%;
+            left: 31.3%;
+            width: 74.8%;
+        }
+    </style>
 </head>
 
 <body>
-    <p>R10: {{ "{:.4}"|format(r10) }}</p>
-    <p>B30 Avg: {{ "{:.4}"|format(b30) }}</p>
+    <div class="user-info-card">
+        <div class="info-panel">
+            <span class="card-background"></span>
+            <img class="card-overlay" src="card_overlay.png" />
+            <div class="info-rating">
+                <img class="rating-badge" src="rating_{{ rating_level }}.png" />
+                <span class="rating-text">
+                    <span class="rating-integral">{{ rating_integer }}</span><span class="rating-fractional">.{{ rating_fraction }}</span>
+                </span>
+            </div>
+            <span class="info-name">{{ user_name }}</span>
+            <span class="info-id">ID: {{ user_code }}</span>
+            <div class="rating-detail">
+                <span>R10 Avg: {{ "{:.4}"|format(r10) }}</span>
+                <br/>
+                <span>B30 Avg: {{ "{:.4}"|format(b30) }}</span>
+            </div>
+        </div>
+        <div class="character-panel">
+            <img class="character-stand-alone" src="{{ favourite_character }}{% if is_uncapped %}u{% endif %}.png" />
+        </div>
+        <img class="logo" src="logo.png">
+    </div>
+
     {% for record in records -%}
     <div class="record-card">
         <div>
-            <span class="order-number">#{{ loop.index }}</span>
-            <span class="song-title">{{ record.title }}</span>
+            <span class="order-number"># 1</span>
+            <span class="song-title">Foo</span>
         </div>
         <div class="col">
             <div class="row">
                 <div class="inner-col">
-                    <span class="text-{{ record.difficulty }}">{{ record.difficulty }} {{ "{:.1}"|format(record.base_rating) }}</span>
-                    <div class="score">{{ record.score }}</div>
+                    <span class="text-FTR">FTR 10.0</span>
+                    <div class="score">10000001</div>
                 </div>
                 <div>
-                    <span class="badge badge-bg"><span class="badge badge-rating">RATING</span> <span class="text-detail">{{ "{:.4}"|format(record.rating) }}</span></span>
+                    <span class="badge badge-bg"><span class="badge badge-rating">RATING</span> <span
+                            class="text-detail">12.0</span></span>
                     <br>
-                    <span class="badge badge-bg"><span class="badge badge-pure">PURE</span> <span class="text-detail">{{ record.pure }} ({{ record.shiny }})</span></span>
+                    <span class="badge badge-bg"><span class="badge badge-pure">PURE</span> <span class="text-detail">1
+                            (1)</span></span>
                     <br>
-                    <span class="badge badge-bg"><span class="badge badge-far">FAR</span> <span class="text-detail">{{ record.far }}</span></span>
+                    <span class="badge badge-bg"><span class="badge badge-far">FAR</span> <span
+                            class="text-detail">0</span></span>
                     <br>
-                    <span class="badge badge-bg"><span class="badge badge-lost">LOST</span> <span class="text-detail">{{ record.lost }}</span></span>
+                    <span class="badge badge-bg"><span class="badge badge-lost">LOST</span> <span
+                            class="text-detail">0</span></span>
                     <br>
                 </div>
             </div>
-            <span class="badge bg-{{ record.clear_type }}">{{ record.clear_type }}</span>
+            <span class="badge bg-pure-memory">pure-memory</span>
             <br>
-            <span class="badge bg-time">TIME RECORDED</span> {{ record.played_date }}
+            <span class="badge bg-time">TIME RECORDED</span> 0
         </div>
     </div>
     {%- endfor %}

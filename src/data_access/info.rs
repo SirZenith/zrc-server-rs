@@ -149,6 +149,71 @@ impl UserInfo {
     }
 }
 
+#[derive(Serialize)]
+pub struct UserInfoForScoreLookup {
+    pub name: String,
+    pub user_code: String,
+    pub favorite_character: i8,
+    pub is_uncapped: bool,
+    pub is_uncapped_override: bool,
+    pub rating: isize,
+    pub is_hide_rating: bool,
+}
+
+impl UserInfoForScoreLookup {
+    pub fn new(conn: &DBAccessManager, user_id: isize) -> Result<Self, rusqlite::Error> {
+        let mut stmt = conn
+            .connection
+            .prepare(sql_stmt::MINIMUM_USER_INFO)
+            .unwrap();
+        let user_info = stmt
+            .query_row(params![user_id], |row| {
+                Ok(UserInfoForScoreLookup {
+                    name: row.get("user_name")?,
+                    user_code: format!("{:0>9}", row.get::<&str, i64>("user_code")?)
+                        .chars()
+                        .collect::<Vec<char>>()
+                        .chunks(3)
+                        .map(|c| c.iter().collect::<String>())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    favorite_character: row.get("fav_partner")?,
+                    is_uncapped: row.get::<&str, String>("uncapped")? == "t",
+                    is_uncapped_override: row.get::<&str, String>("uncapped_override")? == "t",
+                    rating: row.get("rating")?,
+                    is_hide_rating: row.get::<&str, String>("hide_rating")? == "t",
+                })
+            })
+            .unwrap();
+        Ok(user_info)
+    }
+
+    pub fn get_rating_level(&self) -> i8 {
+        lazy_static! {
+            static ref RATING_LEVEL_STEP: [isize; 6] = [
+                349,
+                699,
+                999,
+                1000,
+                1199,
+                1249,
+            ];
+        };
+        let mut level = -1_i8;
+        if self.is_hide_rating {
+            return level
+        }
+        for step in RATING_LEVEL_STEP.iter() {
+            if self.rating > *step {
+                level += 1
+            } else {
+                break
+            }
+        }
+        level
+    }
+}
+
 fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isize) -> Vec<String> {
     let mut stmt = conn
         .connection
@@ -424,4 +489,3 @@ impl MapInfoList {
         Ok(info_list)
     }
 }
-

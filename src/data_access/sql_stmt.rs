@@ -127,6 +127,23 @@ pub const USER_INFO: &str = r#"
         user_id = ?1
 "#;
 
+pub const MINIMUM_USER_INFO: &str = r#"
+    select
+        user_name,
+        user_code,
+        ifnull(favorite_partner, 0) as "fav_partner",
+        ifnull(is_uncapped, '') as "uncapped",
+        ifnull(is_uncapped_override, '') as "uncapped_override",
+        rating,
+        ifnull(is_hide_rating, '') as "hide_rating"
+    from
+        player, part_stats
+    where
+        player.user_id = ?1
+        and part_stats.user_id = player.user_id
+        and part_stats.part_id = fav_partner
+"#;
+
 pub const USER_MOST_RECENT_SCORE: &str = r#"
     select
 		s.song_id, s.difficulty, s.score,

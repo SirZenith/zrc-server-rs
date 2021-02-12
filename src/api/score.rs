@@ -29,6 +29,13 @@ pub async fn score_upload(
 #[derive(Template)]
 #[template(path = "score_page.html")]
 struct RecordsTemplate {
+    user_name: String,
+    user_code: String,
+    rating_integer: isize,
+    rating_fraction: isize,
+    rating_level: i8,
+    favourite_character: i8,
+    is_uncapped: bool,
     r10: f64,
     b30: f64,
     records: Vec<LookupedScore>,
@@ -43,7 +50,23 @@ pub async fn score_lookup(
         Err(_) => Ok(warp::reply::html("".to_string())),
         Ok(records) => {
             let (r10, b30) = conn.get_r10_and_b30(user_id).unwrap();
+            let user_info = conn.get_minimum_user_info(user_id).unwrap();
+            let rating_level = user_info.get_rating_level();
             let template = RecordsTemplate {
+                user_name: user_info.name,
+                user_code: user_info
+                    .user_code
+                    .chars()
+                    .collect::<Vec<char>>()
+                    .chunks(3)
+                    .map(|c| c.iter().collect::<String>())
+                    .collect::<Vec<String>>()
+                    .join(" "),
+                rating_integer: user_info.rating / 100,
+                rating_fraction: user_info.rating % 100,
+                rating_level,
+                favourite_character: user_info.favorite_character,
+                is_uncapped: user_info.is_uncapped && !user_info.is_uncapped_override,
                 r10,
                 b30,
                 records: records,
