@@ -5,6 +5,7 @@ const GRADE_STEPS: [isize; 7] = [
     0, 8_600_000, 8_900_000, 9_200_000, 9_500_000, 9_800_000, 9_900_000,
 ];
 
+#[derive(Debug)]
 pub struct LookupedScore {
     pub title: String,
     pub difficulty: &'static str,

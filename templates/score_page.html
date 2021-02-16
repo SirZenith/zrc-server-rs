@@ -3,8 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="format-detection" content="telephone=no" />
     <title>Score Records</title>
     <style>
+        @font-face {
+            font-family: Exo-Semibold;
+            src: url("/static/Fonts/Exo-Semibold.ttf");
+        }
+
+        @font-face {
+            font-family: GeosansLight;
+            src: url("/static/Fonts/GeosansLight.ttf")
+        }
+
         *,
         :after,
         :before {
@@ -19,9 +30,7 @@
         }
 
         body {
-            margin: 2em auto;
-            padding: 2em 0.5em;
-            max-width: 900px;
+            /* padding: 2em 0.5em; */
             font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
             font-size: 1rem;
             font-weight: 400;
@@ -66,6 +75,158 @@
     </style>
 
     <style>
+        .user-info-card {
+            position: relative;
+            width: 90vw;
+            /* keeping aspect ratio */
+            padding-bottom: 54vw;
+            /* background-image: url('./profile/test.png'); */
+            /* background-size: 108%; */
+            /* background-position-x: 19%; */
+            /* border: 1px dashed black; */
+            margin: 2em auto 5em auto;
+        }
+
+
+        .info-panel {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .logo {
+            position: absolute;
+            width: 15%;
+            top: 33%;
+            left: 8%;
+        }
+
+        .card-overlay {
+            position: absolute;
+            top: 31%;
+            left: 5%;
+            width: 90%;
+            box-shadow: 0 0 20px black;
+            border-radius: 6px;
+        }
+
+        .card-background {
+            position: absolute;
+            top: 31%;
+            left: 5%;
+            width: 90%;
+            height: 46%;
+            background-image: url("/static/img/world/4.jpg");
+            background-position: 0% 60%;
+            background-size: 100%;
+            background-attachment: fixed;
+            border-radius: 6px;
+        }
+
+        .info-rating {
+            position: absolute;
+            top: 57.5%;
+            left: 6.5%;
+            width: 5%;
+            padding-bottom: 5%;
+        }
+
+        .rating-text {
+            position: absolute;
+            top: 15%;
+            left: 13%;
+            font-family: Exo-Semibold;
+            font-weight: 900;
+            color: white;
+        }
+
+        .rating-text-bg {
+            position: absolute;
+            top: 15%;
+            left: 13%;
+            font-family: Exo-Semibold;
+            font-weight: 900;
+            color: #51485b;
+            -webkit-text-stroke: 0.4vw #51485b;
+        }
+
+        .rating-integral {
+            font-size: 1.75vw;
+            font-weight: bold;
+        }
+
+
+        .rating-fractional {
+            font-size: 1.2vw;
+            font-weight: bold;
+        }
+
+        .rating-badge {
+            position: absolute;
+            width: 100%;
+        }
+
+        .name-block {
+            position: absolute;
+            top: 57.5%;
+            left: 12.7%;
+            width: 70%;
+            height: 30%;
+        }
+
+        .name-block-bg {
+            position: absolute;
+            top: 57.5%;
+            left: 12.7%;
+            width: 70%;
+            height: 30%;
+            -webkit-text-stroke: 0.2vw white;
+        }
+
+        .info-name {
+            position: absolute;
+            top: 0%;
+            font-family: GeosansLight;
+            font-size: 2.45vw;
+        }
+
+        .info-id {
+            position: absolute;
+            top: 17%;
+            font-family: Exo-Semibold;
+            font-size: 1vw;
+        }
+
+        .rating-detail {
+            position: absolute;
+            top: 67%;
+            left: 12.5%;
+            font-family: "苹方-简";
+            font-size: 1.3vw;
+            font-weight: 300;
+            color: white;
+        }
+
+        .character-panel {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .character-stand-alone {
+            position: absolute;
+            top: 3%;
+            left: 29.5%;
+            width: 75.4%;
+        }
+    </style>
+
+    <style>
+        .score-container {
+            width: 40vw;
+            margin: 5em auto;
+        }
+
         .bg-track-lost {
             color: #fff;
             background-color: #af2700 !important;
@@ -98,9 +259,7 @@
             background-color: rgba(178, 202, 247, 20) !important;
             /* color:  */
         }
-    </style>
 
-    <style>
         .text-BYD {
             color: #dc3545 !important;
         }
@@ -139,9 +298,7 @@
             font-family: monospace;
             font-size: 1.5rem;
         }
-    </style>
 
-    <style>
         .badge {
             display: inline-block;
             padding: .35em .6em;
@@ -196,195 +353,95 @@
             background-color: #28a745;
         }
     </style>
-
-    <style>
-        @font-face {
-            font-family: Exo;
-            src: url("./Exo-Semibold.ttf");
-        }
-
-        @font-face {
-            font-family: GeosansLight;
-            src: url("./GeosansLight.ttf")
-        }
-
-        .user-info-card {
-            position: relative;
-            width: 60vw;
-            /* keeping aspect ratio */
-            padding-bottom: 36vw;
-            /* border: 1px dashed black; */
-            margin-bottom: 3em;
-        }
-
-        .logo {
-            position: absolute;
-            width: 15%;
-            top: 33%;
-            left: 8%;
-        }
-
-        .info-panel {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-        }
-
-        .card-overlay {
-            position: absolute;
-            top: 26%;
-            left: 3.8%;
-            width: 98%;
-            /* z-index: -10px; */
-        }
-
-        .card-background {
-            position: absolute;
-            top: 30.42%;
-            left: 6.43%;
-            width: 93.57%;
-            height: 47.3%;
-            background-image: url("4.jpg");
-            background-position: 0% 60%;
-            background-attachment: fixed;
-            border-radius: 6px;
-            /* z-index: -20; */
-        }
-
-        .info-rating {
-            position: absolute;
-            top: 58%;
-            left: 8.2%;
-            width: 5%;
-            padding-bottom: 5%;
-            background-image: url("rating_4.jpg");
-            background-color: transparent;
-        }
-
-        .rating-text {
-            position: absolute;
-            top: 12%;
-            left: 4%;
-            font-family: Exo;
-            font-weight: 900;
-            color: white;
-            text-shadow: 0.2vw 0.2vw 0.4vw #51485b;
-        }
-
-        .rating-integral {
-            font-size: 1.4vw;
-            font-weight: bold;
-        }
-
-        .rating-fractional {
-            font-size: 0.8vw;
-            font-weight: bold;
-        }
-
-        .rating-badge {
-            position: absolute;
-            width: 100%;
-        }
-
-        .info-name {
-            position: absolute;
-            top: 57.5%;
-            left: 14.24%;
-            font-family: GeosansLight;
-            font-size: 1.6vw;
-        }
-        
-        .info-id {
-            position: absolute;
-            top: 62.5%;
-            left: 14.4%;
-            font-family: Exo;
-            font-size: 0.7vw;
-        }
-
-        .rating-detail {
-            position: absolute;
-            top: 67%;
-            left: 14.4%;
-            font-family: "苹方-简";
-            font-size: 1vw;
-            font-weight: 200;
-            color: white;
-        }
-
-        .character-panel {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-        }
-
-        .character-stand-alone {
-            position: absolute;
-            top: 3%;
-            left: 31.3%;
-            width: 74.8%;
-        }
-    </style>
 </head>
 
 <body>
     <div class="user-info-card">
         <div class="info-panel">
             <span class="card-background"></span>
-            <img class="card-overlay" src="card_overlay.png" />
+            <img class="card-overlay" src="/static/img/card_overlay_mod.png" />
             <div class="info-rating">
-                <img class="rating-badge" src="rating_{{ rating_level }}.png" />
-                <span class="rating-text">
-                    <span class="rating-integral">{{ rating_integer }}</span><span class="rating-fractional">.{{ rating_fraction }}</span>
-                </span>
+                {% if rating_level == -1 %}
+                    <img class="rating-badge" src="/static/img/rating_off.png" />
+                    <div class="rating-text" style="text-align: center; font-weight: bold;">
+                        <span>--</span>
+                    </div>
+                {% else %}
+                    <img class="rating-badge" src="/static/img/rating_{{- rating_level -}}.png" />
+                    <div class="rating-text-bg">
+                        <span class="rating-integral">{{ rating_integer }}</span><span class="rating-fractional">.{{
+                            rating_fraction }}</span>
+                    </div>
+                    <div class="rating-text">
+                        <span class="rating-integral">{{ rating_integer }}</span><span class="rating-fractional">.{{
+                            rating_fraction }}</span>
+                    </div>
+                {% endif %}
             </div>
-            <span class="info-name">{{ user_name }}</span>
-            <span class="info-id">ID: {{ user_code }}</span>
+            <div class="name-block-bg">
+                <span class="info-name">{{ user_name }}</span>
+                <span class="info-id">ID: {{ user_code }}</span>
+            </div>
+            <div class="name-block">
+                <span class="info-name">{{ user_name }}</span>
+                <span class="info-id">ID: {{ user_code }}</span>
+            </div>
             <div class="rating-detail">
-                <span>R10 Avg: {{ "{:.4}"|format(r10) }}</span>
-                <br/>
-                <span>B30 Avg: {{ "{:.4}"|format(b30) }}</span>
+                <span>
+                    <font face="monospace">R10</font> Avg: {{ "{:.4}"|format(r10) }}
+                </span>
+                <br />
+                <span>
+                    <font face="monospace">B30</font> Avg: {{ "{:.4}"|format(b30) }}
+                </span>
             </div>
         </div>
         <div class="character-panel">
-            <img class="character-stand-alone" src="{{ favourite_character }}{% if is_uncapped %}u{% endif %}.png" />
+            <img class="character-stand-alone"
+                src="/static/char/{{ favourite_character }}{% if is_uncapped %}u{% endif %}.png" />
         </div>
-        <img class="logo" src="logo.png">
+        <!-- <img class="logo" src="./profile/logo.png"> -->
     </div>
 
-    {% for record in records -%}
-    <div class="record-card">
-        <div>
-            <span class="order-number"># 1</span>
-            <span class="song-title">Foo</span>
-        </div>
-        <div class="col">
-            <div class="row">
-                <div class="inner-col">
-                    <span class="text-FTR">FTR 10.0</span>
-                    <div class="score">10000001</div>
-                </div>
-                <div>
-                    <span class="badge badge-bg"><span class="badge badge-rating">RATING</span> <span
-                            class="text-detail">12.0</span></span>
-                    <br>
-                    <span class="badge badge-bg"><span class="badge badge-pure">PURE</span> <span class="text-detail">1
-                            (1)</span></span>
-                    <br>
-                    <span class="badge badge-bg"><span class="badge badge-far">FAR</span> <span
-                            class="text-detail">0</span></span>
-                    <br>
-                    <span class="badge badge-bg"><span class="badge badge-lost">LOST</span> <span
-                            class="text-detail">0</span></span>
-                    <br>
-                </div>
+    <div class="score-container">
+        {% for record in records -%}
+        <div class="record-card">
+            <div>
+                <span class="order-number">#{{ loop.index }}</span>
+                <span class="song-title">{{ record.title }}</span>
             </div>
-            <span class="badge bg-pure-memory">pure-memory</span>
-            <br>
-            <span class="badge bg-time">TIME RECORDED</span> 0
+            <div class="col">
+                <div class="row">
+                    <div class="inner-col">
+                        <span class="text-{{ record.difficulty }}">{{ record.difficulty }} {{
+                            "{:.1}"|format(record.base_rating) }}</span>
+                        <div class="score">{{ record.score }}</div>
+                    </div>
+                    <div>
+                        <span class="badge badge-bg"><span class="badge badge-rating">RATING</span> <span
+                                class="text-detail">{{ "{:.4}"|format(record.rating) }}</span></span>
+                        <br>
+                        <span class="badge badge-bg"><span class="badge badge-pure">PURE</span> <span
+                                class="text-detail">{{
+                                record.pure }} ({{ record.shiny }})</span></span>
+                        <br>
+                        <span class="badge badge-bg"><span class="badge badge-far">FAR</span> <span
+                                class="text-detail">{{
+                                record.far }}</span></span>
+                        <br>
+                        <span class="badge badge-bg"><span class="badge badge-lost">LOST</span> <span
+                                class="text-detail">{{
+                                record.lost }}</span></span>
+                        <br>
+                    </div>
+                </div>
+                <span class="badge bg-{{ record.clear_type }}">{{ record.clear_type }}</span>
+                <br>
+                <span class="badge bg-time">TIME RECORDED</span> {{ record.played_date }}
+            </div>
         </div>
+        {%- endfor %}
     </div>
-    {%- endfor %}
 </body>
 
 </html>

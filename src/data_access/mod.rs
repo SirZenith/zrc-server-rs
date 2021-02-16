@@ -92,17 +92,27 @@ mod dlc {
     }
 
     impl DLItem {
-        pub fn song_dl_url(&self, hostname: &str) -> String {
+        pub fn song_dl_url(
+            &self,
+            hostname: &str,
+            prefix_static_file: &str,
+            songs_dirname: &str,
+        ) -> String {
             format!(
                 "http://{}/{}/{}/{}/{}",
-                hostname, FILE_SERVER_PREFIX, SONG_FILE_DIR, self.song_id, "base.ogg"
+                hostname, prefix_static_file, songs_dirname, self.song_id, "base.ogg"
             )
         }
 
-        pub fn chart_dl_url(&self, hostname: &str) -> String {
+        pub fn chart_dl_url(
+            &self,
+            hostname: &str,
+            prefix_static_file: &str,
+            songs_dirname: &str,
+        ) -> String {
             format!(
                 "http://{}/{}/{}/{}/{}.aff",
-                hostname, FILE_SERVER_PREFIX, SONG_FILE_DIR, self.song_id, self.difficulty
+                hostname, prefix_static_file, songs_dirname, self.song_id, self.difficulty
             )
         }
     }
@@ -155,7 +165,9 @@ impl DBAccessManager {
         &self,
         user_id: isize,
         requests: DLRequest,
-        hostname: String,
+        hostname: &str,
+        prefix_static_file: &str,
+        songs_dirname: &str,
     ) -> dlc::DlcInfoList {
         let mut infoes = HashMap::new();
         let song_id_condition = if !requests.song_ids.is_empty() {
@@ -180,7 +192,9 @@ impl DBAccessManager {
             "pack_purchase_info as pur",
             "pur.pack_name = song.pack_name",
             &song_id_condition,
-            &hostname,
+            hostname,
+            prefix_static_file,
+            songs_dirname,
         );
         self.get_purchase_form_table(
             user_id,
@@ -190,7 +204,9 @@ impl DBAccessManager {
             "single_purchase_info pur",
             "pur.song_id = song.song_id",
             &song_id_condition,
-            &hostname,
+            hostname,
+            prefix_static_file,
+            songs_dirname,
         );
 
         infoes
@@ -198,7 +214,7 @@ impl DBAccessManager {
 
     /// Return all DLC info (checksum only).
     pub fn get_all_purchase_dl(&self, user_id: isize) -> dlc::DlcInfoList {
-        self.get_purchase_dl(user_id, DLRequest::empty_request(), String::new())
+        self.get_purchase_dl(user_id, DLRequest::empty_request(), "", "", "")
     }
 
     // Look up checksum and download URL for DLC with given table name and condition.
@@ -212,6 +228,8 @@ impl DBAccessManager {
         condition: &str,
         song_id_condition: &str,
         hostname: &str,
+        prefix_static_file: &str,
+        songs_dirname: &str,
     ) {
         let items = self.get_dl_items(user_id, stmt, table_name, condition, song_id_condition);
         for item in items.into_iter().filter(|i| i.chart_dl || i.song_dl) {
@@ -222,7 +240,7 @@ impl DBAccessManager {
             if item.song_dl && !item.audio_checksum.is_empty() {
                 info.audio.checksum = item.audio_checksum.clone();
                 if need_url {
-                    info.audio.url = item.song_dl_url(hostname);
+                    info.audio.url = item.song_dl_url(hostname, prefix_static_file, songs_dirname);
                 }
             }
             if item.chart_dl && !item.chart_checksum.is_empty() {
@@ -232,7 +250,7 @@ impl DBAccessManager {
                     .or_insert(InfoItem::new());
                 entry.checksum = item.chart_checksum.clone();
                 if need_url {
-                    entry.url = item.chart_dl_url(hostname);
+                    entry.url = item.chart_dl_url(hostname, prefix_static_file, songs_dirname);
                 }
             }
         }
@@ -373,11 +391,7 @@ impl DBAccessManager {
         char_id: isize,
         skill_sealed: bool,
     ) -> Result<usize, rusqlite::Error> {
-        let skill_sealed = if skill_sealed {
-            "t"
-        } else {
-            "f"
-        };
+        let skill_sealed = if skill_sealed { "t" } else { "f" };
         self.connection.execute(
             sql_stmt::CHANGE_CHARACTER,
             params![char_id, skill_sealed, user_id],
@@ -406,7 +420,7 @@ impl DBAccessManager {
 
 // ----------------------------------------------------------------------------
 mod info;
-use info::{UserInfo, UserInfoForScoreLookup, PackInfo, GameInfo, MapInfoList};
+use info::{GameInfo, MapInfoList, PackInfo, UserInfo, UserInfoForScoreLookup};
 
 /// Getting basic info for user log in.
 impl DBAccessManager {
@@ -414,7 +428,10 @@ impl DBAccessManager {
         UserInfo::new(&self, user_id)
     }
 
-    pub fn get_minimum_user_info(&self, user_id: isize) -> Result<UserInfoForScoreLookup, rusqlite::Error> {
+    pub fn get_minimum_user_info(
+        &self,
+        user_id: isize,
+    ) -> Result<UserInfoForScoreLookup, rusqlite::Error> {
         UserInfoForScoreLookup::new(&self, user_id)
     }
 
@@ -433,7 +450,7 @@ impl DBAccessManager {
 
 // ----------------------------------------------------------------------------
 mod score;
-pub use score::{ScoreRecord, LookupedScore};
+pub use score::{LookupedScore, ScoreRecord};
 
 /// Score upload and lookup service.
 impl DBAccessManager {

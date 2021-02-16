@@ -199,10 +199,10 @@ impl UserInfoForScoreLookup {
                 1249,
             ];
         };
-        let mut level = -1_i8;
         if self.is_hide_rating {
-            return level
+            return -1
         }
+        let mut level = 0_i8;
         for step in RATING_LEVEL_STEP.iter() {
             if self.rating > *step {
                 level += 1

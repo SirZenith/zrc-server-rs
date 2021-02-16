@@ -1,5 +1,5 @@
-extern crate libc;
 extern crate askama;
+extern crate libc;
 #[macro_use]
 extern crate lazy_static;
 extern crate r2d2;
@@ -15,7 +15,7 @@ pub mod api;
 pub mod data_access;
 
 use std::collections::HashMap;
-use std::env;
+// use std::env;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -38,8 +38,6 @@ use warp::Filter;
 use data_access::*;
 
 const STATIC_USER_ID: isize = 1;
-const FILE_SERVER_PREFIX: &str = "file";
-const SONG_FILE_DIR: &str = "static/songs";
 
 #[derive(Serialize)]
 pub struct ResponseContainer<T: Serialize> {
@@ -70,10 +68,17 @@ pub struct Cli {
     // Root directory of static files.
     #[structopt(short = "r", long = "root", default_value = "./")]
     document_root: String,
-    
-    // Prefix for API
-    // #[structopt(long, default_value = "")]
-    // prefix: String,
+    // Prefix for all API, final access URL will be http://<hostname>/<prefix-all>/<your-api>
+    #[structopt(long = "prefix-all", default_value = "")]
+    prefix_all: String,
+
+    // Path prefix for static files, final access URL will be http://<hostname>/<prefix-all>/<prefix-static>/<your-filename>
+    #[structopt(long = "prefix-static", default_value = "static")]
+    prefix_static_file: String,
+
+    // Name of songs directory under document root
+    #[structopt(long = "songs-dirname", default_value = "songs")]
+    songs_dirname: String,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -83,8 +88,30 @@ fn is_zero<T: Into<f64> + Copy>(num: &T) -> bool {
 
 pub async fn start_serving(argv: Vec<String>) {
     let cli = Cli::from_iter(argv.iter());
-    let socket_addr = format!("{}:{}", cli.ip, cli.port);
-    let socket_addr = match socket_addr.parse::<SocketAddr>() {
+
+    // TODO: Add existance check.
+    let db_path = Path::new(&cli.db_path).canonicalize().unwrap();
+    let sqlite_connection_manager = SqliteConnectionManager::file(db_path);
+    let sqlite_pool = r2d2::Pool::new(sqlite_connection_manager)
+        .expect("Failed to create r2d2 SQLite connection pool");
+    let pool_arc = Arc::new(sqlite_pool);
+
+    let document_root = Path::new(&cli.document_root).canonicalize().unwrap();
+    println!(
+        "Setting document root path at: {:?}",
+        document_root.as_os_str()
+    );
+
+    let routes = api::api_filter(
+        pool_arc,
+        cli.hostname,
+        document_root,
+        cli.prefix_all,
+        cli.prefix_static_file,
+        cli.songs_dirname,
+    );
+
+    let socket_addr = match format!("{}:{}", cli.ip, cli.port).parse::<SocketAddr>() {
         Ok(s) => s,
         Err(e) => {
             println!(
@@ -94,20 +121,6 @@ pub async fn start_serving(argv: Vec<String>) {
             return;
         }
     };
-
-    let db_path = Path::new(&cli.db_path).canonicalize().unwrap();
-    let sqlite_connection_manager = SqliteConnectionManager::file(db_path);
-    let sqlite_pool = r2d2::Pool::new(sqlite_connection_manager)
-        .expect("Failed to create r2d2 SQLite connection pool");
-    let pool_arc = Arc::new(sqlite_pool);
-
-    let document_root = Path::new(&cli.document_root).canonicalize().unwrap();
-    println!("Setting document root path at: {:?}", document_root.as_os_str());
-    env::set_current_dir(document_root).unwrap();
-
-    let file_server = warp::path(FILE_SERVER_PREFIX).and(warp::fs::dir("./"));
-    let routes = api::api_filter(pool_arc, cli.hostname);
-    let routes = routes.or(file_server);
     warp::serve(routes).run(socket_addr).await;
 }
 

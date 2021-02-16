@@ -313,7 +313,7 @@ pub const COMPUTE_R10_AND_B30: &str = r#"
 pub const QUERY_BEST_SCORE_FOR_LOOKUP: &str = r#"
     select
         case
-            when trim(song.title_local_jp) != '' then song.title_local_jp
+            when trim(song.title_local_ja) != '' then song.title_local_ja
             else song.title_local_en
         end as title,
         s.difficulty,

@@ -1,5 +1,5 @@
-use super::*;
 use super::data_access::DLRequest;
+use super::*;
 
 mod character;
 mod download;
@@ -17,8 +17,12 @@ fn respond<T: Serialize>(
 pub fn api_filter(
     pool: SqlitePool,
     hostname: String,
+    document_root: std::path::PathBuf,
+    prefix: String,
+    prefix_static_file: String,
+    songs_dirname: String,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    warp::path("welcome")
+    let route = warp::path("welcome")
         .map(|| "Welcome to Zrcaea Server")
         .or(login(pool.clone()))
         .or(aggregate(pool.clone()))
@@ -27,14 +31,25 @@ pub fn api_filter(
         .or(present_me(pool.clone()))
         .or(user_info(pool.clone()))
         .or(world_map(pool.clone()))
-        .or(get_download_list(pool.clone(), hostname.clone()))
+        .or(get_download_list(
+            pool.clone(),
+            hostname.clone(),
+            prefix_static_file.clone(),
+            songs_dirname.clone(),
+        ))
         .or(change_character(pool.clone()))
         .or(toggle_uncap(pool.clone()))
         .or(score_token(pool.clone()))
         .or(score_upload(pool.clone()))
         .or(score_lookup(pool.clone()))
         .or(upload_backup_data(pool.clone()))
-        .or(download_backup_data(pool.clone()))
+        .or(download_backup_data(pool.clone()));
+    let file_server = warp::path(prefix_static_file).and(warp::fs::dir(document_root));
+    let mut route = route.or(file_server).boxed();
+    if !prefix.is_empty() {
+        route = warp::path(prefix).and(route).boxed();
+    }
+    route
 }
 
 // GET /auth/login
@@ -111,10 +126,18 @@ fn world_map(
 fn get_download_list(
     pool: SqlitePool,
     hostname: String,
+    prefix_static_file: String,
+    songs_dirname: String,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("serve" / "download" / "me" / "song")
         .and(warp::get())
-        .map(move || hostname.clone())
+        .map(move || {
+            (
+                hostname.clone(),
+                prefix_static_file.clone(),
+                songs_dirname.clone(),
+            )
+        })
         .and(warp::query::<DLRequest>())
         .and(with_db_access_manager(pool))
         .and_then(download::get_download_list)
