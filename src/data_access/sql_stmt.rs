@@ -113,7 +113,7 @@ pub const USER_INFO: &str = r#"
         prog_boost, stamina,
         next_fragstam_ts,
         max_stamina_ts,
-        ifnull(max_stamina_notification, '') as "stamina_notification",
+        ifnull(max_stamina_notification_enabled, '') as "stamina_notification",
         ifnull(is_hide_rating, '') as "hide_rating", 
         ifnull(favorite_partner, 0) as "fav_partner",
         recent_score_date,
@@ -159,6 +159,14 @@ pub const USER_MOST_RECENT_SCORE: &str = r#"
 		and s.song_id = s2.song_id
 		and b.user_id = ?1
 		and b.played_date = s2.played_date
+"#;
+
+pub const SET_FAVORITE_CHARACTER: &str = r#"
+    update player set favorite_partner = ?1 where user_id = ?2
+"#;
+
+pub const SET_USER_SETTING: &str = r#"
+    update player set {option_name} = ?1 where user_id = ?2
 "#;
 
 // score

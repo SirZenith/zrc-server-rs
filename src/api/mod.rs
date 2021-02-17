@@ -31,6 +31,7 @@ pub fn api_filter(
         .or(present_me(pool.clone()))
         .or(user_info(pool.clone()))
         .or(world_map(pool.clone()))
+        .or(user_setting(pool.clone()))
         .or(get_download_list(
             pool.clone(),
             hostname.clone(),
@@ -120,6 +121,17 @@ fn world_map(
         .and(warp::get())
         .and(with_db_access_manager(pool))
         .and_then(info::world_map)
+}
+
+// POST /user/me/setting/:option
+fn user_setting(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("user" / "me" / "setting" / String)
+        .and(warp::post())
+        .and(warp::body::form())
+        .and(with_db_access_manager(pool))
+        .and_then(info::user_setting)
 }
 
 // GET /serve/download/me/song?url&sid
