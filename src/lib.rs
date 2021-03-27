@@ -20,11 +20,6 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
-use libc::{c_char, c_int, size_t};
-use std::ffi::CStr;
-use std::slice::from_raw_parts;
-use std::str::Utf8Error;
-
 use r2d2::{Pool, PooledConnection};
 
 use r2d2_sqlite::SqliteConnectionManager;
@@ -90,13 +85,25 @@ pub async fn start_serving(argv: Vec<String>) {
     let cli = Cli::from_iter(argv.iter());
 
     // TODO: Add existance check.
-    let db_path = Path::new(&cli.db_path).canonicalize().unwrap();
+    let db_path = match Path::new(&cli.db_path).canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
     let sqlite_connection_manager = SqliteConnectionManager::file(db_path);
     let sqlite_pool = r2d2::Pool::new(sqlite_connection_manager)
         .expect("Failed to create r2d2 SQLite connection pool");
     let pool_arc = Arc::new(sqlite_pool);
 
-    let document_root = Path::new(&cli.document_root).canonicalize().unwrap();
+    let document_root = match Path::new(&cli.document_root).canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
     println!(
         "Setting document root path at: {:?}",
         document_root.as_os_str()
@@ -122,30 +129,4 @@ pub async fn start_serving(argv: Vec<String>) {
         }
     };
     warp::serve(routes).run(socket_addr).await;
-}
-
-pub unsafe fn convert_double_pointer_to_vec(
-    data: &mut &mut c_char,
-    len: size_t,
-) -> Result<Vec<String>, Utf8Error> {
-    from_raw_parts(data, len)
-        .iter()
-        .map(|arg| CStr::from_ptr(*arg).to_str().map(ToString::to_string))
-        .collect()
-}
-
-#[no_mangle]
-pub async unsafe extern "C" fn rust_main(
-    argc: c_int,
-    data: &mut &mut c_char,
-    _envp: &mut &mut c_char,
-) -> c_int {
-    let argv = convert_double_pointer_to_vec(data, argc as size_t);
-
-    if let Ok(argv) = argv {
-        start_serving(argv).await;
-        0
-    } else {
-        1
-    }
 }
