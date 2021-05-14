@@ -135,7 +135,7 @@ impl BackupData {
             created_at: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
-                .as_secs() as i64,
+                .as_millis(),
             checksums: HashMap::new(),
         };
         data.scores.insert("".to_string(), Vec::new());
