@@ -115,7 +115,7 @@ pub struct BackupData {
     devicemodelname: SimpleStringData,
     story: HashMap<String, Vec<StoryData>>,
     #[serde(rename = "createdAt")]
-    created_at: i64,
+    created_at: u128,
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     checksums: HashMap<String, String>,
 }
@@ -168,7 +168,7 @@ impl BackupData {
             self.installid.val,
             self.devicemodelname.val,
             serde_json::to_string(&self.story[""]).unwrap(),
-            self.created_at,
+            (self.created_at / 1000) as i64,
         ])?;
 
         Ok(())
@@ -267,7 +267,7 @@ impl BackupData {
                 self.devicemodelname.val = devicemodel;
                 self.story
                     .insert("".to_string(), serde_json::from_str(&story).unwrap());
-                self.created_at = create_at;
+                self.created_at = create_at as u128 * 1000;
                 true
             }
         }
