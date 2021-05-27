@@ -74,8 +74,8 @@ pub const GAME_INFO: &str = r#"
         max_stamina,
         stamina_recover_tick,
         core_exp,
-        ifnull(world_ranking_enabled, '') as "World Ranking Enabled",
-        ifnull(is_byd_chapter_unlocked, '') as "Byd Chapter Unlocked"
+        ifnull(world_ranking_enabled, '') as world_ranking_enabled,
+        ifnull(is_byd_chapter_unlocked, '') as byd_chapter_unlocked
     from
         game_info
 "#;

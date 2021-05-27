@@ -3,15 +3,28 @@ use super::*;
 
 mod character;
 mod download;
+pub mod error;
 mod info;
 mod save;
 mod score;
 
-fn respond<T: Serialize>(
-    result: T,
-    status: warp::http::StatusCode,
-) -> Result<impl warp::Reply, warp::Rejection> {
-    Ok(warp::reply::with_status(warp::reply::json(&result), status))
+type Result<T> = std::result::Result<T, warp::Rejection>;
+
+#[derive(Serialize)]
+pub struct ResponseContainer<T: Serialize> {
+    success: bool,
+    value: T,
+    #[serde(skip_serializing_if = "is_zero")]
+    error_code: i32,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    error_msg: String,
+}
+
+fn respond_ok<T: Serialize>(result: T) -> Result<impl warp::Reply> {
+    Ok(warp::reply::with_status(
+        warp::reply::json(&result),
+        warp::http::StatusCode::OK,
+    ))
 }
 
 pub fn api_filter(
@@ -50,7 +63,7 @@ pub fn api_filter(
     if !prefix.is_empty() {
         route = warp::path(prefix).and(route).boxed();
     }
-    route
+    route.recover(api::error::handle_rejection).boxed()
 }
 
 // GET /auth/login

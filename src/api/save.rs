@@ -5,27 +5,23 @@ use data_access::save::BackupData;
 pub async fn upload_backup_data(
     mut data: BackupData,
     mut conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply> {
     let user_id = STATIC_USER_ID;
     // println!("{}", serde_json::to_string(&data).unwrap());
     data.update_score_on_cloud(&mut conn, user_id).unwrap();
     data.insert_game_progress(&conn, user_id).unwrap();
     let mut result = HashMap::new();
     result.insert("user_id", user_id);
-    respond(
-        ResponseContainer {
-            success: true,
-            value: result,
-            error_code: 0,
-        },
-        warp::http::StatusCode::OK,
-    )
+    respond_ok(ResponseContainer {
+        success: true,
+        value: result,
+        error_code: 0,
+        error_msg: String::new(),
+    })
 }
 
 // GET /user/me/save
-pub async fn download_backup_data(
-    conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn download_backup_data(conn: DBAccessManager) -> Result<impl warp::Reply> {
     let user_id = STATIC_USER_ID;
     let mut data = BackupData::new_with_id(user_id);
     match data.get_game_progress(&conn, user_id) {
@@ -39,6 +35,7 @@ pub async fn download_backup_data(
                 success: true,
                 value: data,
                 error_code: 0,
+                error_msg: String::new(),
             };
             Ok(warp::reply::with_status(
                 serde_json::to_string(&container).unwrap(),

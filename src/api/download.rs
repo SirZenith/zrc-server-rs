@@ -6,7 +6,7 @@ pub async fn get_download_list(
     info_group: (String, String, String),
     requests: data_access::DLRequest,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply> {
     let checksums = conn.get_purchase_dl(
         STATIC_USER_ID,
         requests,
@@ -18,6 +18,7 @@ pub async fn get_download_list(
         success: true,
         value: checksums,
         error_code: 0,
+        error_msg: String::new(),
     };
-    respond(result, warp::http::StatusCode::OK)
+    respond_ok(result)
 }

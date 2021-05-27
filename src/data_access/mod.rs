@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 mod info;
 pub mod save;
 mod score;
@@ -234,6 +236,18 @@ pub use score::{LookupedScore, ScoreRecord};
 
 pub type SqlitePool = Arc<Pool<SqliteConnectionManager>>;
 pub type PooledSqlite = PooledConnection<SqliteConnectionManager>;
+#[derive(Error, Debug)]
+pub enum ZrcDBError {
+    #[error("No data found - {0}")]
+    DataNotFound(String),
+    // Error that caused by sql stataments in modules
+    #[error("internal error, context - {0} || error: {1}")]
+    Internal(String, rusqlite::Error),
+    #[error("other error, context - {0} || error: {1}")]
+    Other(String, rusqlite::Error),
+}
+
+impl warp::reject::Reject for ZrcDBError {}
 
 pub struct DBAccessManager {
     connection: PooledSqlite,
@@ -434,8 +448,9 @@ impl DBAccessManager {
         UserInfoForScoreLookup::new(&self, user_id)
     }
 
-    pub fn get_game_info(&self) -> Result<GameInfo, rusqlite::Error> {
+    pub fn get_game_info(&self) -> Result<GameInfo, ZrcDBError> {
         GameInfo::new(&self)
+            .map_err(|e| ZrcDBError::Internal("while querying game info".to_string(), e))
     }
 
     pub fn get_pack_info(&self) -> Result<Vec<PackInfo>, rusqlite::Error> {
@@ -485,7 +500,7 @@ impl DBAccessManager {
         score: &ScoreRecord,
         user_id: isize,
         time: Option<&i64>,
-    ) -> Result<ResponseContainer<HashMap<String, isize>>, rusqlite::Error> {
+    ) -> Result<HashMap<String, isize>, rusqlite::Error> {
         score::score_upload(self, score, user_id, time)
     }
 

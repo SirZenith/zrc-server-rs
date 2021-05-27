@@ -1,16 +1,3 @@
-extern crate askama;
-extern crate libc;
-#[macro_use]
-extern crate lazy_static;
-extern crate r2d2;
-extern crate r2d2_sqlite;
-#[macro_use]
-extern crate rusqlite;
-extern crate serde;
-extern crate strfmt;
-extern crate structopt;
-extern crate warp;
-
 pub mod api;
 pub mod data_access;
 
@@ -20,29 +7,18 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
+use data_access::*;
+use lazy_static::lazy_static;
+use log;
 use r2d2::{Pool, PooledConnection};
-
 use r2d2_sqlite::SqliteConnectionManager;
-
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
-
+use simple_logger::SimpleLogger;
 use structopt::StructOpt;
-
 use warp::Filter;
 
-use data_access::*;
-
 const STATIC_USER_ID: isize = 1;
-
-#[derive(Serialize)]
-pub struct ResponseContainer<T: Serialize> {
-    success: bool,
-    value: T,
-    #[serde(skip_serializing_if = "is_zero")]
-    error_code: i32,
-    // #[serde(skip_serializing_if = "String::is_empty")]
-    // error_msg: String,
-}
 
 #[derive(StructOpt)]
 pub struct Cli {
@@ -82,6 +58,11 @@ fn is_zero<T: Into<f64> + Copy>(num: &T) -> bool {
 }
 
 pub async fn start_serving(argv: Vec<String>) {
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .init()
+        .unwrap();
+
     let cli = Cli::from_iter(argv.iter());
 
     // TODO: Add existance check.
@@ -92,22 +73,20 @@ pub async fn start_serving(argv: Vec<String>) {
             return;
         }
     };
-    let sqlite_connection_manager = SqliteConnectionManager::file(db_path);
+    let sqlite_connection_manager = SqliteConnectionManager::file(&db_path);
     let sqlite_pool = r2d2::Pool::new(sqlite_connection_manager)
         .expect("Failed to create r2d2 SQLite connection pool");
     let pool_arc = Arc::new(sqlite_pool);
+    log::info!("Connected to database: {}", cli.db_path);
 
     let document_root = match Path::new(&cli.document_root).canonicalize() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("{}", e);
+            log::error!("{}", e);
             return;
         }
     };
-    println!(
-        "Setting document root path at: {:?}",
-        document_root.as_os_str()
-    );
+    log::info!("Document root path: {}", cli.document_root);
 
     let routes = api::api_filter(
         pool_arc,
@@ -121,9 +100,11 @@ pub async fn start_serving(argv: Vec<String>) {
     let socket_addr = match format!("{}:{}", cli.ip, cli.port).parse::<SocketAddr>() {
         Ok(s) => s,
         Err(e) => {
-            println!(
-                "Wrong hostname with IP: {}, Port: {}\n\t{}",
-                cli.ip, cli.port, e
+            log::error!(
+                "invalid hostname, IP: {}, Port: {}\n\t{}",
+                cli.ip,
+                cli.port,
+                e
             );
             return;
         }

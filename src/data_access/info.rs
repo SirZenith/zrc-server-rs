@@ -190,24 +190,17 @@ impl UserInfoForScoreLookup {
 
     pub fn get_rating_level(&self) -> i8 {
         lazy_static! {
-            static ref RATING_LEVEL_STEP: [isize; 6] = [
-                349,
-                699,
-                999,
-                1000,
-                1199,
-                1249,
-            ];
+            static ref RATING_LEVEL_STEP: [isize; 6] = [349, 699, 999, 1000, 1199, 1249,];
         };
         if self.is_hide_rating {
-            return -1
+            return -1;
         }
         let mut level = 0_i8;
         for step in RATING_LEVEL_STEP.iter() {
             if self.rating > *step {
                 level += 1
             } else {
-                break
+                break;
             }
         }
         level
@@ -306,16 +299,14 @@ impl GameInfo {
     pub fn new(conn: &DBAccessManager) -> Result<Self, rusqlite::Error> {
         let mut stmt = conn.connection.prepare(sql_stmt::LEVEL_STEP).unwrap();
         let mut level_steps = Vec::new();
-        let steps = stmt
-            .query_map(params![], |row| {
-                Ok(LevelStep {
-                    level: row.get(0)?,
-                    level_exp: row.get(1)?,
-                })
+        let steps = stmt.query_map(params![], |row| {
+            Ok(LevelStep {
+                level: row.get("lv")?,
+                level_exp: row.get("exp_val")?,
             })
-            .unwrap();
+        })?;
         for step in steps {
-            let step = step.unwrap();
+            let step = step?;
             level_steps.push(step);
         }
 
@@ -324,15 +315,14 @@ impl GameInfo {
             (250, false, false);
         let mut stmt = conn.connection.prepare(sql_stmt::GAME_INFO).unwrap();
         stmt.query_row(params![], |row| {
-            curr_ts = row.get(0)?;
-            max_stamina = row.get(1)?;
-            stamina_recover_tick = row.get(2)?;
-            core_exp = row.get(3)?;
-            world_ranking_enabled = row.get::<usize, String>(4)? == "t";
-            is_byd_chapter_unlocked = row.get::<usize, String>(5)? == "t";
+            curr_ts = row.get("now")?;
+            max_stamina = row.get("max_stamina")?;
+            stamina_recover_tick = row.get("stamina_recover_tick")?;
+            core_exp = row.get("core_exp")?;
+            world_ranking_enabled = row.get::<&str, String>("world_ranking_enabled")? == "t";
+            is_byd_chapter_unlocked = row.get::<&str, String>("byd_chapter_unlocked")? == "t";
             Ok(())
-        })
-        .unwrap();
+        })?;
         Ok(GameInfo {
             curr_ts,
             max_stamina,

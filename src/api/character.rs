@@ -10,7 +10,7 @@ pub struct ChangeToCharacter {
 pub async fn change_character(
     change_to: ChangeToCharacter,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply> {
     conn.change_character(STATIC_USER_ID, change_to.character, change_to.skill_sealed)
         .unwrap();
     let result = format!(
@@ -30,7 +30,7 @@ pub struct ToggleResult {
 pub async fn toggle_uncap(
     part_id: isize,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply> {
     let user_id = STATIC_USER_ID;
     let stats = conn.toggle_uncap(user_id, part_id).unwrap();
     let json = warp::reply::json(&ResponseContainer {
@@ -40,6 +40,7 @@ pub async fn toggle_uncap(
             character: stats,
         },
         error_code: 0,
+        error_msg: String::new(),
     });
     Ok(json)
 }

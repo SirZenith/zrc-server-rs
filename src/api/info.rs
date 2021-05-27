@@ -1,5 +1,3 @@
-extern crate serde_json;
-
 use super::*;
 
 #[derive(Serialize)]
@@ -23,21 +21,18 @@ pub struct AggregateCall {
 }
 
 // GET /auth/login
-pub async fn login(_: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn login(_: DBAccessManager) -> Result<impl warp::Reply> {
     let result = LoginToken {
         access_token: "nothing".to_string(),
         token_type: "Bear".to_string(),
         success: true,
         error_code: 0,
     };
-    respond(result, warp::http::StatusCode::OK)
+    respond_ok(result)
 }
 
 // GET /compose/aggregate?<calls>
-pub async fn aggregate(
-    call: AggregateCall,
-    conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn aggregate(call: AggregateCall, conn: DBAccessManager) -> Result<impl warp::Reply> {
     let endpoints: Vec<AggregateEndPoint> = serde_json::from_str(&call.calls).unwrap();
     let mut results = Vec::new();
     for call in endpoints {
@@ -66,34 +61,31 @@ pub async fn aggregate(
 }
 
 // GET /game/info
-pub async fn game_info(conn: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
-    respond(conn.get_game_info().unwrap(), warp::http::StatusCode::OK)
+pub async fn game_info(conn: DBAccessManager) -> Result<impl warp::Reply> {
+    match conn.get_game_info() {
+        Ok(info) => respond_ok(info),
+        Err(err) => Err(warp::reject::custom(err)),
+    }
 }
 
 // GET /purchase/bundle/pack
-pub async fn pack_info(conn: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
-    respond(conn.get_pack_info().unwrap(), warp::http::StatusCode::OK)
+pub async fn pack_info(conn: DBAccessManager) -> Result<impl warp::Reply> {
+    respond_ok(conn.get_pack_info().unwrap())
 }
 
 // GET /present/me
-pub async fn present_me(_: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
-    respond("[]", warp::http::StatusCode::OK)
+pub async fn present_me(_: DBAccessManager) -> Result<impl warp::Reply> {
+    respond_ok("[]")
 }
 
 // GET /user/me
-pub async fn user_info(conn: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
-    respond(
-        conn.get_user_info(STATIC_USER_ID).unwrap(),
-        warp::http::StatusCode::OK,
-    )
+pub async fn user_info(conn: DBAccessManager) -> Result<impl warp::Reply> {
+    respond_ok(conn.get_user_info(STATIC_USER_ID).unwrap())
 }
 
 // GET /world/map/me
-pub async fn world_map(conn: DBAccessManager) -> Result<impl warp::Reply, warp::Rejection> {
-    respond(
-        conn.get_map_info(STATIC_USER_ID).unwrap(),
-        warp::http::StatusCode::OK,
-    )
+pub async fn world_map(conn: DBAccessManager) -> Result<impl warp::Reply> {
+    respond_ok(conn.get_map_info(STATIC_USER_ID).unwrap())
 }
 
 // POST /user/me/setting/:option
@@ -101,7 +93,7 @@ pub async fn user_setting(
     option: String,
     setting: HashMap<String, String>,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply, warp::Rejection> {
+) -> Result<impl warp::Reply> {
     let value = match setting.get("value") {
         Some(v) => v,
         // TODO: make proper rejection.
@@ -109,21 +101,23 @@ pub async fn user_setting(
     };
     if option == "favorite_character" {
         let char_id = value.parse::<isize>().unwrap();
-        conn.set_favorite_character(STATIC_USER_ID, char_id).unwrap();
+        conn.set_favorite_character(STATIC_USER_ID, char_id)
+            .unwrap();
     } else {
         let value = value.parse::<bool>().unwrap();
         match conn.set_user_setting(STATIC_USER_ID, option, value) {
             Err(e) => {
                 eprintln!("{:?}", e);
                 return Err(warp::reject::not_found());
-            },
-            Ok(_) => {},
+            }
+            Ok(_) => {}
         };
     }
     let result = ResponseContainer {
         success: true,
         value: conn.get_user_info(STATIC_USER_ID).unwrap(),
         error_code: 0,
+        error_msg: String::new(),
     };
     Ok(warp::reply::json(&result))
 }

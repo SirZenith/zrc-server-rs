@@ -422,12 +422,8 @@ pub fn score_upload(
     score_record: &ScoreRecord,
     user_id: isize,
     time: Option<&i64>,
-) -> Result<ResponseContainer<HashMap<String, isize>>, rusqlite::Error> {
-    let mut result = ResponseContainer {
-        success: true,
-        value: HashMap::new(),
-        error_code: 0,
-    };
+) -> Result<HashMap<String, isize>, rusqlite::Error> {
+    let mut result = HashMap::new();
     let rating = score_record.score2rating(&conn.connection)?;
     let tx = conn.connection.transaction()?;
     let time_played: i64;
@@ -445,7 +441,7 @@ pub fn score_upload(
     score_record.update_recent_score(&tx, user_id, time_played, rating)?;
     let rating = update_player_rating(&tx, user_id)?;
     tx.commit()?;
-    result.value.insert("user_rating".to_string(), rating);
+    result.insert("user_rating".to_string(), rating);
     Ok(result)
 }
 
