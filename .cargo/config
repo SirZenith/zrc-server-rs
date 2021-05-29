@@ -1,0 +1,6 @@
+[target.aarch64-apple-ios]
+linker = "arm-apple-darwin11-ld"
+rustflags = [
+    "-C", 
+    "link-args=-F/home/zenith/Developer/iOS-Cross/iPhoneSDK/iPhoneOS14.5.sdk/System/Library/Frameworks/ -L/home/zenith/Developer/iOS-Cross/iPhoneSDK/iPhoneOS14.5.sdk/usr/lib"
+]
