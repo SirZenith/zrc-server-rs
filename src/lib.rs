@@ -50,6 +50,10 @@ pub struct Cli {
     // Name of songs directory under document root
     #[structopt(long = "songs-dirname", default_value = "songs")]
     songs_dirname: String,
+
+    // Whether to turn off authentication
+    #[structopt(long = "no-auth")]
+    no_auth: bool,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -95,6 +99,7 @@ pub async fn start_serving(argv: Vec<String>) {
         cli.prefix_all,
         cli.prefix_static_file,
         cli.songs_dirname,
+        cli.no_auth,
     );
 
     let socket_addr = match format!("{}:{}", cli.ip, cli.port).parse::<SocketAddr>() {

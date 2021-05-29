@@ -420,7 +420,7 @@ impl DBAccessManager {
         part_id: isize,
     ) -> Result<CharacterStatses, rusqlite::Error> {
         let mut stmt = self.connection.prepare(sql_stmt::TOGGLE_UNCAP).unwrap();
-        stmt.execute(params![STATIC_USER_ID, part_id]).unwrap();
+        stmt.execute(params![user_id, part_id]).unwrap();
         let stats = self.get_char_statses(user_id, Some(part_id));
         stats
     }
@@ -538,13 +538,20 @@ impl DBAccessManager {
         score::score_lookup(self, user_id)
     }
 
-    pub fn get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), rusqlite::Error> {
+    pub fn get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), ZrcDBError> {
+        self._get_r10_and_b30(user_id)
+            .map_err(|e| ZrcDBError::Internal("while querying r10 and b30".to_string(), e))
+    }
+
+    fn _get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), rusqlite::Error> {
         let mut stmt = self
             .connection
-            .prepare(sql_stmt::COMPUTE_R10_AND_B30)
-            .unwrap();
+            .prepare(sql_stmt::COMPUTE_R10_AND_B30)?;
         stmt.query_row(params![user_id], |row| {
-            Ok((row.get::<&str, f64>("r10")?, row.get::<&str, f64>("b30")?))
+            Ok((
+                row.get::<&str, f64>("r10")?,
+                row.get::<&str, f64>("b30")?
+            ))
         })
     }
 }

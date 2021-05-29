@@ -1,7 +1,7 @@
-use super::*;
-use std::convert::Infallible;
+use std::{convert::Infallible};
 use warp::http::StatusCode;
-
+use thiserror::Error;
+use super::*;
 use crate::data_access::ZrcDBError;
 
 #[allow(dead_code)]
@@ -11,9 +11,10 @@ const TRANSICATION_ERROR: i32 = -7; // 处理交易时发生了错误
 const DOWNLOAD_ALREADY_FINISHED: i32 = -5; // 所有的曲目都已经下载完毕
 #[allow(dead_code)]
 const ACCOUNT_LOGIN_ELSEWHERE: i32 = -4; // 您的账号已在别处登录
-                                           // const CONNECT_FAILED: i32 = -3; // 无法连接至服务器
 #[allow(dead_code)]
-const UNKNOWN_ERROR: i32 = 1; // 发生未知错误
+const CONNECT_FAILED: i32 = -3; // 无法连接至服务器
+#[allow(dead_code)]
+const UNKNOWN_ERROR: i32 = 1; // 内部错误或未知错误
 #[allow(dead_code)]
 const SERVER_MAINTAINING: i32 = 2; // Arcaea服务器正在维护
 #[allow(dead_code)]
@@ -60,7 +61,7 @@ const FUNCTION_NOT_AVAILABLE: i32 = 151; // 目前无法使用此功能
 #[allow(dead_code)]
 const NO_USER_FOUND: i32 = 401; // 用户不存在
 #[allow(dead_code)]
-const CONNECT_FAILED: i32 = 403; // 无法连接至服务器
+const AUTH_FAILED: i32 = 403; // 认证失败
 
 // Serial Number --------------------------------------------------------------
 #[allow(dead_code)]
@@ -102,48 +103,44 @@ const NO_DATA_ON_CLOUD: i32 = 9905; // 没有在云端发现任何数据
 const ERROR_DURING_UPDATING_DATA: i32 = 9907; // 更新数据时发生了问题
                                                 // const VERSION_TOO_OLD: i32 = 9908; // 服务器只支持最新的版本，请更新Arcaea
 
+#[derive(Error, Debug)]
+pub enum ZrcSVError {
+    #[error("database error - {0}")]
+    DBError(ZrcDBError),
+    #[error("JWT token creation error")]
+    JWTTokenCreationError,
+    #[error("failed to read authentication header field")]
+    NoAuthHeader,
+    #[error("invalid authentication token")]
+    InvalidAuthToken,
+    #[error("template rendering error - {0}")]
+    TemplateError(askama::Error),
+}
+
+impl warp::reject::Reject for ZrcSVError {}
+                                                
 pub async fn handle_rejection(
     err: warp::Rejection,
 ) -> std::result::Result<impl warp::Reply, Infallible> {
-    let status: StatusCode;
-    let message: &str;
-    let error_code: i32;
-
-    if err.is_not_found() {
-        status = StatusCode::NOT_FOUND;
-        message = "not found";
-        error_code = UNKNOWN_ERROR;
+    let (status, message, error_code) = if err.is_not_found() {
+        (StatusCode::NOT_FOUND, "not found", UNKNOWN_ERROR)
     } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
-        status = StatusCode::METHOD_NOT_ALLOWED;
-        message = "method not allowed";
-        error_code = UNKNOWN_ERROR;
-    } else if let Some(e) = err.find::<ZrcDBError>() {
+        (StatusCode::METHOD_NOT_ALLOWED, "method not allowed", UNKNOWN_ERROR)
+    } else if let Some(e) = err.find::<ZrcSVError>() {
         match e {
-            ZrcDBError::DataNotFound(msg) => {
-                status = StatusCode::NOT_FOUND;
-                message = "data needed not found";
-                error_code = UNKNOWN_ERROR;
-                log::error!("data not found, {}", msg);
-            }
-            ZrcDBError::Internal(msg, error) => {
-                status = StatusCode::INTERNAL_SERVER_ERROR;
-                message = "server side error";
-                error_code = UNKNOWN_ERROR;
-                log::error!("data access internal error, {}, {}", msg, error);
-            }
-            ZrcDBError::Other(msg) => {
-                status = StatusCode::INTERNAL_SERVER_ERROR;
-                message = "unknown database error";
-                error_code = UNKNOWN_ERROR;
-                log::error!("other data access error, {}", msg);
+            ZrcSVError::DBError(e) => handle_dberror(e),
+            ZrcSVError::JWTTokenCreationError => (StatusCode::FORBIDDEN, "authentication token creation failed", FUNCTION_NOT_AVAILABLE),
+            ZrcSVError::NoAuthHeader => (StatusCode::FORBIDDEN, "can't read authentication header", AUTH_FAILED),
+            ZrcSVError::InvalidAuthToken => (StatusCode::FORBIDDEN, "invalid authentication token", AUTH_FAILED),
+            ZrcSVError::TemplateError(e) => {
+                log::error!("template rendering error, {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, "template rendering error", UNKNOWN_ERROR)
             }
         }
     } else {
-        status = StatusCode::INTERNAL_SERVER_ERROR;
-        message = "internal server error";
-        error_code = UNKNOWN_ERROR;
         log::error!("unhandled error, {:?}", err);
-    }
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error", UNKNOWN_ERROR)
+    };
 
     let json = warp::reply::json(&ResponseContainer {
         success: false,
@@ -153,4 +150,22 @@ pub async fn handle_rejection(
     });
 
     Ok(warp::reply::with_status(json, status))
+}
+
+fn handle_dberror(err: &ZrcDBError) -> (StatusCode, &str, i32) {
+    let (status, message, error_code) = match err {
+        ZrcDBError::DataNotFound(msg) => {
+            log::error!("data not found, {}", msg);
+            (StatusCode::NOT_FOUND, "data needed not found", UNKNOWN_ERROR)
+        }
+        ZrcDBError::Internal(msg, error) => {
+            log::error!("data access internal error, {}, {}", msg, error);
+            (StatusCode::INTERNAL_SERVER_ERROR, "server side error", UNKNOWN_ERROR)
+        }
+        ZrcDBError::Other(msg) => {
+            log::error!("other data access error, {}", msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, "unknown database error", UNKNOWN_ERROR)
+        }
+    };
+    (status, message, error_code)
 }

@@ -4,7 +4,7 @@ use crate::data_access::LookupedScore;
 use askama::Template;
 
 // GET /score/token
-pub async fn score_token(pool: DBAccessManager) -> Result<impl warp::Reply> {
+pub async fn score_token(_user_id: isize, pool: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     Ok(warp::reply::with_status(
         format!(
             r#"{{"success": true, "value": {{"token": "{}"}}}}"#,
@@ -17,9 +17,9 @@ pub async fn score_token(pool: DBAccessManager) -> Result<impl warp::Reply> {
 // POST /score/song
 pub async fn score_upload(
     score_record: data_access::ScoreRecord,
+    user_id: isize,
     mut conn: DBAccessManager,
-) -> Result<impl warp::Reply> {
-    let user_id = STATIC_USER_ID;
+) -> ZrcSVResult<impl warp::Reply> {
     let result = conn.score_upload(&score_record, user_id, None).unwrap();
     respond_ok(ResponseContainer {
         success: true,
@@ -45,11 +45,13 @@ struct RecordsTemplate {
 }
 
 // GET /score/:user_id
-pub async fn score_lookup(user_id: isize, conn: DBAccessManager) -> Result<impl warp::Reply> {
+pub async fn score_lookup(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     match conn.score_lookup(user_id) {
         Err(_) => Ok(warp::reply::html("".to_string())),
         Ok(records) => {
-            let (r10, b30) = conn.get_r10_and_b30(user_id).unwrap();
+            let (r10, b30) = conn
+                .get_r10_and_b30(user_id)
+                .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
             let user_info = match conn.get_minimum_user_info(user_id) {
                 Ok(info) => info,
                 Err(err) => return Err(warp::reject::custom(err)),
@@ -67,7 +69,7 @@ pub async fn score_lookup(user_id: isize, conn: DBAccessManager) -> Result<impl 
                 b30,
                 records: records,
             };
-            let res = template.render().unwrap();
+            let res = template.render().map_err(|e| warp::reject::custom(ZrcSVError::TemplateError(e)))?;
             Ok(warp::reply::html(res))
         }
     }

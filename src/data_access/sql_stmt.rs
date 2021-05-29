@@ -231,14 +231,13 @@ pub const REPLACE_RECENT_SCORE: &str = r#"
 pub const COMPUTE_RATING: &str = r#"
     with
     best as (
-        select ROW_NUMBER () OVER ( 
-            order by rating desc
-        ) row_num,
-        rating
-        from  best_score b, score s
-        where b.user_id = ?1
+        select rating
+        from best_score b, score s
+        where b.user_id = 1
             and b.user_id = s.user_id
             and b.played_date = s.played_date
+        order by rating desc
+        limit 30
     ),
     recent as (
         select rating
@@ -252,7 +251,6 @@ pub const COMPUTE_RATING: &str = r#"
         round((ifnull(b30, 0) + ifnull(r10, 0)) / (ifnull(b30_count, 1) + ifnull(r10_count, 1)) * 100)
     from (
         select sum(rating) b30, count(rating) b30_count from best
-        where row_num <= 30
     ), (
         select sum(rating) r10, count(rating) r10_count from recent
     )
@@ -291,14 +289,13 @@ pub const QUERY_BEST_SCORE_FOR_BACKUP: &str = r#"
 pub const COMPUTE_R10_AND_B30: &str = r#"
     with
     best as (
-        select ROW_NUMBER () OVER ( 
-            order by rating desc
-        ) row_num,
-        rating
-        from  best_score b, score s
-        where b.user_id = ?1
+        select rating
+        from best_score b, score s
+        where b.user_id = 1
             and b.user_id = s.user_id
             and b.played_date = s.played_date
+        order by rating desc
+        limit 30
     ),
     recent as (
         select rating
@@ -312,7 +309,6 @@ pub const COMPUTE_R10_AND_B30: &str = r#"
         ifnull(b30, 0) / ifnull(b30_count, 1) b30, ifnull(r10, 0) / ifnull(r10_count, 1) r10
     from (
         select sum(rating) b30, count(rating) b30_count from best
-        where row_num <= 30
     ), (
         select sum(rating) r10, count(rating) r10_count from recent
     )

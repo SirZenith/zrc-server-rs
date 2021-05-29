@@ -213,7 +213,7 @@ fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isi
             column, table, user_id
         ))?;
     let items = stmt
-        .query_map(rusqlite::NO_PARAMS, |row| Ok(row.get::<usize, String>(0)?))?;
+        .query_map([], |row| Ok(row.get::<usize, String>(0)?))?;
 
     let result = items.into_iter().map(|x| x.unwrap()).collect();
     Ok(result)

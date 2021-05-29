@@ -5,10 +5,11 @@ pub async fn get_download_list(
     // (hostname, prefix_static_file, songs_direname)
     info_group: (String, String, String),
     requests: data_access::DLRequest,
+    user_id: isize,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply> {
+) -> ZrcSVResult<impl warp::Reply> {
     let checksums = conn.get_purchase_dl(
-        STATIC_USER_ID,
+        user_id,
         requests,
         &info_group.0,
         &info_group.1,

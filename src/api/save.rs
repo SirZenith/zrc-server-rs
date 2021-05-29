@@ -4,9 +4,9 @@ use data_access::save::BackupData;
 // POST /user/me/save
 pub async fn upload_backup_data(
     mut data: BackupData,
+    user_id: isize,
     mut conn: DBAccessManager,
-) -> Result<impl warp::Reply> {
-    let user_id = STATIC_USER_ID;
+) -> ZrcSVResult<impl warp::Reply> {
     // println!("{}", serde_json::to_string(&data).unwrap());
     data.update_score_on_cloud(&mut conn, user_id).unwrap();
     data.insert_game_progress(&conn, user_id).unwrap();
@@ -21,8 +21,7 @@ pub async fn upload_backup_data(
 }
 
 // GET /user/me/save
-pub async fn download_backup_data(conn: DBAccessManager) -> Result<impl warp::Reply> {
-    let user_id = STATIC_USER_ID;
+pub async fn download_backup_data(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     let mut data = BackupData::new_with_id(user_id);
     match data.get_game_progress(&conn, user_id) {
         false => Ok(warp::reply::with_status(

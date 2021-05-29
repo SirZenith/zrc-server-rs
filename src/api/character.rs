@@ -9,13 +9,14 @@ pub struct ChangeToCharacter {
 // POST /user/me/characters
 pub async fn change_character(
     change_to: ChangeToCharacter,
+    user_id: isize,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply> {
-    conn.change_character(STATIC_USER_ID, change_to.character, change_to.skill_sealed)
+) -> ZrcSVResult<impl warp::Reply> {
+    conn.change_character(user_id, change_to.character, change_to.skill_sealed)
         .unwrap();
     let result = format!(
         r#"{{"success": true,"value": {{"user_id": {}, "character": {}}}}}"#,
-        STATIC_USER_ID, change_to.character
+        user_id, change_to.character
     );
     Ok(warp::reply::with_status(result, warp::http::StatusCode::OK))
 }
@@ -29,9 +30,9 @@ pub struct ToggleResult {
 // POST /user/me/characters/<part_id>/toggle_uncap
 pub async fn toggle_uncap(
     part_id: isize,
+    user_id: isize,
     conn: DBAccessManager,
-) -> Result<impl warp::Reply> {
-    let user_id = STATIC_USER_ID;
+) -> ZrcSVResult<impl warp::Reply> {
     let stats = conn.toggle_uncap(user_id, part_id).unwrap();
     let json = warp::reply::json(&ResponseContainer {
         success: true,
