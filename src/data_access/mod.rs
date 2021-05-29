@@ -243,8 +243,8 @@ pub enum ZrcDBError {
     // Error that caused by sql stataments in modules
     #[error("internal error, context - {0} || error: {1}")]
     Internal(String, rusqlite::Error),
-    #[error("other error, context - {0} || error: {1}")]
-    Other(String, rusqlite::Error),
+    #[error("other error, context - {0}")]
+    Other(String),
 }
 
 impl warp::reject::Reject for ZrcDBError {}
@@ -437,37 +437,49 @@ impl DBAccessManager {
 // ----------------------------------------------------------------------------
 /// Getting and setting basic info for user log in.
 impl DBAccessManager {
-    pub fn get_user_info(&self, user_id: isize) -> Result<UserInfo, rusqlite::Error> {
-        UserInfo::new(&self, user_id)
+    pub fn get_user_info(&self, user_id: isize) -> Result<UserInfo, ZrcDBError> {
+        UserInfo::new(&self, user_id).map_err(
+        |e| ZrcDBError::Internal("while querying user info".to_string(), e)
+        )
     }
 
     pub fn get_minimum_user_info(
         &self,
         user_id: isize,
-    ) -> Result<UserInfoForScoreLookup, rusqlite::Error> {
-        UserInfoForScoreLookup::new(&self, user_id)
+    ) -> Result<UserInfoForScoreLookup, ZrcDBError> {
+        UserInfoForScoreLookup::new(&self, user_id).map_err(
+            |e| ZrcDBError::Internal("while querying minimum user info".to_string(), e)
+        )
     }
 
     pub fn get_game_info(&self) -> Result<GameInfo, ZrcDBError> {
-        GameInfo::new(&self)
-            .map_err(|e| ZrcDBError::Internal("while querying game info".to_string(), e))
+        GameInfo::new(&self).map_err(
+            |e| ZrcDBError::Internal("while querying game info".to_string(), e)
+        )
     }
 
-    pub fn get_pack_info(&self) -> Result<Vec<PackInfo>, rusqlite::Error> {
-        PackInfo::get_pack_list(&self)
+    pub fn get_pack_info(&self) -> Result<Vec<PackInfo>, ZrcDBError> {
+        PackInfo::get_pack_list(&self).map_err(
+            |e| ZrcDBError::Internal("while querying pack info".to_string(), e)
+        )
     }
 
-    pub fn get_map_info(&self, user_id: isize) -> Result<MapInfoList, rusqlite::Error> {
-        MapInfoList::new(&self, user_id)
+    pub fn get_map_info(&self, user_id: isize) -> Result<MapInfoList, ZrcDBError> {
+        MapInfoList::new(&self, user_id).map_err(
+            |e| ZrcDBError::Internal("while querying map info".to_string(), e)
+        )
     }
 
     pub fn set_favorite_character(
         &self,
         user_id: isize,
         char_id: isize,
-    ) -> Result<usize, rusqlite::Error> {
+    ) -> Result<usize, ZrcDBError> {
         self.connection
             .execute(sql_stmt::SET_FAVORITE_CHARACTER, params![char_id, user_id])
+            .map_err(
+                |e| ZrcDBError::Internal("while querying map info".to_string(), e)
+            )
     }
 
     pub fn set_user_setting(
@@ -475,14 +487,18 @@ impl DBAccessManager {
         user_id: isize,
         option_name: String,
         value: bool,
-    ) -> Result<usize, rusqlite::Error> {
+    ) -> Result<usize, ZrcDBError> {
         use strfmt::strfmt;
 
         let mut var = HashMap::new();
         var.insert("option_name".to_string(), option_name);
         let value = if value { "t" } else { "" };
-        let stmt = &strfmt(sql_stmt::SET_USER_SETTING, &var).unwrap();
-        self.connection.execute(stmt, params![value, user_id])
+        let stmt = &strfmt(sql_stmt::SET_USER_SETTING, &var).map_err(
+            |e| ZrcDBError::Other(format!("while preparing statement '{}': {}", sql_stmt::SET_USER_SETTING, e))
+        )?;
+        self.connection
+            .execute(stmt, params![value, user_id])
+            .map_err(|e| ZrcDBError::Internal("while set user setting".to_string(), e))
     }
 }
 

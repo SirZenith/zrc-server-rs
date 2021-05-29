@@ -22,6 +22,7 @@ pub struct AggregateCall {
 
 // GET /auth/login
 pub async fn login(_: DBAccessManager) -> Result<impl warp::Reply> {
+    // TODO: add authentication
     let result = LoginToken {
         access_token: "nothing".to_string(),
         token_type: "Bear".to_string(),
@@ -33,6 +34,7 @@ pub async fn login(_: DBAccessManager) -> Result<impl warp::Reply> {
 
 // GET /compose/aggregate?<calls>
 pub async fn aggregate(call: AggregateCall, conn: DBAccessManager) -> Result<impl warp::Reply> {
+    // TODO: Error handling
     let endpoints: Vec<AggregateEndPoint> = serde_json::from_str(&call.calls).unwrap();
     let mut results = Vec::new();
     for call in endpoints {
@@ -50,7 +52,7 @@ pub async fn aggregate(call: AggregateCall, conn: DBAccessManager) -> Result<imp
             "/world/map/me" => {
                 serde_json::to_string(&conn.get_map_info(STATIC_USER_ID).unwrap()).unwrap()
             }
-            _ => "[]".to_string(),
+            _ => serde_json::to_string("[]").unwrap(),
         };
         results.push(format!(r#"{{"id":{},"value":{}}}"#, call.id, content));
     }
@@ -64,13 +66,16 @@ pub async fn aggregate(call: AggregateCall, conn: DBAccessManager) -> Result<imp
 pub async fn game_info(conn: DBAccessManager) -> Result<impl warp::Reply> {
     match conn.get_game_info() {
         Ok(info) => respond_ok(info),
-        Err(err) => Err(warp::reject::custom(err)),
+        Err(e) => Err(warp::reject::custom(e)),
     }
 }
 
 // GET /purchase/bundle/pack
 pub async fn pack_info(conn: DBAccessManager) -> Result<impl warp::Reply> {
-    respond_ok(conn.get_pack_info().unwrap())
+    match conn.get_pack_info() {
+        Ok(info) => respond_ok(info),
+        Err(e) => Err(warp::reject::custom(e))
+    }
 }
 
 // GET /present/me
@@ -80,12 +85,18 @@ pub async fn present_me(_: DBAccessManager) -> Result<impl warp::Reply> {
 
 // GET /user/me
 pub async fn user_info(conn: DBAccessManager) -> Result<impl warp::Reply> {
-    respond_ok(conn.get_user_info(STATIC_USER_ID).unwrap())
+    match conn.get_user_info(STATIC_USER_ID) {
+        Ok(info) => respond_ok(info),
+        Err(e) => Err(warp::reject::custom(e))
+    }
 }
 
 // GET /world/map/me
 pub async fn world_map(conn: DBAccessManager) -> Result<impl warp::Reply> {
-    respond_ok(conn.get_map_info(STATIC_USER_ID).unwrap())
+    match conn.get_map_info(STATIC_USER_ID) {
+        Ok(info) => respond_ok(info),
+        Err(e) => Err(warp::reject::custom(e))
+    }
 }
 
 // POST /user/me/setting/:option
@@ -101,23 +112,25 @@ pub async fn user_setting(
     };
     if option == "favorite_character" {
         let char_id = value.parse::<isize>().unwrap();
-        conn.set_favorite_character(STATIC_USER_ID, char_id)
-            .unwrap();
+        if let Err(e) = conn.set_favorite_character(STATIC_USER_ID, char_id) {
+            return Err(warp::reject::custom(e));
+        };
     } else {
         let value = value.parse::<bool>().unwrap();
         match conn.set_user_setting(STATIC_USER_ID, option, value) {
-            Err(e) => {
-                eprintln!("{:?}", e);
-                return Err(warp::reject::not_found());
-            }
+            Err(e) => return Err(warp::reject::custom(e)),
             Ok(_) => {}
         };
     }
+    let info = match conn.get_user_info(STATIC_USER_ID) {
+        Ok(info) => info,
+        Err(e) => return Err(warp::reject::custom(e))
+    };
     let result = ResponseContainer {
         success: true,
-        value: conn.get_user_info(STATIC_USER_ID).unwrap(),
+        value: info,
         error_code: 0,
         error_msg: String::new(),
     };
-    Ok(warp::reply::json(&result))
+    respond_ok(result)
 }

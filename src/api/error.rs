@@ -131,11 +131,11 @@ pub async fn handle_rejection(
                 error_code = UNKNOWN_ERROR;
                 log::error!("data access internal error, {}, {}", msg, error);
             }
-            ZrcDBError::Other(msg, error) => {
+            ZrcDBError::Other(msg) => {
                 status = StatusCode::INTERNAL_SERVER_ERROR;
                 message = "unknown database error";
                 error_code = UNKNOWN_ERROR;
-                log::error!("other data access error, {}, {}", msg, error);
+                log::error!("other data access error, {}", msg);
             }
         }
     } else {

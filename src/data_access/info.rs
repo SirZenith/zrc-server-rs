@@ -70,11 +70,11 @@ pub struct UserInfo {
 
 impl UserInfo {
     pub fn new(conn: &DBAccessManager, user_id: isize) -> Result<Self, rusqlite::Error> {
-        let mut stmt = conn.connection.prepare(sql_stmt::USER_INFO).unwrap();
-        let world_unlocks = get_item_list(conn, "item_name", "world_unlock", user_id);
-        let world_songs = get_item_list(conn, "item_name", "world_song_unlock", user_id);
-        let packs = get_item_list(conn, "pack_name", "pack_purchase_info", user_id);
-        let singles = get_item_list(conn, "song_id", "single_purchase_info", user_id);
+        let mut stmt = conn.connection.prepare(sql_stmt::USER_INFO)?;
+        let world_unlocks = get_item_list(conn, "item_name", "world_unlock", user_id)?;
+        let world_songs = get_item_list(conn, "item_name", "world_song_unlock", user_id)?;
+        let packs = get_item_list(conn, "pack_name", "pack_purchase_info", user_id)?;
+        let singles = get_item_list(conn, "song_id", "single_purchase_info", user_id)?;
         let mut user_info = stmt
             .query_row(params![user_id], |row| {
                 let settings = Setting {
@@ -117,16 +117,15 @@ impl UserInfo {
                     join_date: row.get("join_date")?,
                 })
             })
-            .unwrap();
-        user_info.get_most_recent_score(conn);
+            ?;
+        user_info.get_most_recent_score(conn)?;
         Ok(user_info)
     }
 
-    fn get_most_recent_score(&mut self, conn: &DBAccessManager) {
+    fn get_most_recent_score(&mut self, conn: &DBAccessManager) -> Result<(), rusqlite::Error> {
         let mut stmt = conn
             .connection
-            .prepare(sql_stmt::USER_MOST_RECENT_SCORE)
-            .unwrap();
+            .prepare(sql_stmt::USER_MOST_RECENT_SCORE)?;
         let score = stmt
             .query_row(&[&self.user_id], |row| {
                 Ok(MostRecentScore {
@@ -143,9 +142,9 @@ impl UserInfo {
                     clear_type: row.get("clear_type")?,
                     best_clear_type: row.get("best_clear_type")?,
                 })
-            })
-            .unwrap();
+            })?;
         self.recent_score.push(score);
+        Ok(())
     }
 }
 
@@ -165,7 +164,7 @@ impl UserInfoForScoreLookup {
         let mut stmt = conn
             .connection
             .prepare(sql_stmt::MINIMUM_USER_INFO)
-            .unwrap();
+            ?;
         let user_info = stmt
             .query_row(params![user_id], |row| {
                 Ok(UserInfoForScoreLookup {
@@ -183,8 +182,7 @@ impl UserInfoForScoreLookup {
                     rating: row.get("rating")?,
                     is_hide_rating: row.get::<&str, String>("hide_rating")? == "t",
                 })
-            })
-            .unwrap();
+            })?;
         Ok(user_info)
     }
 
@@ -207,19 +205,18 @@ impl UserInfoForScoreLookup {
     }
 }
 
-fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isize) -> Vec<String> {
+fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isize) -> Result<Vec<String>, rusqlite::Error> {
     let mut stmt = conn
         .connection
         .prepare(&format!(
             "select {} from {} where user_id = {}",
             column, table, user_id
-        ))
-        .unwrap();
+        ))?;
     let items = stmt
-        .query_map(rusqlite::NO_PARAMS, |row| row.get::<usize, String>(0))
-        .unwrap();
+        .query_map(rusqlite::NO_PARAMS, |row| Ok(row.get::<usize, String>(0)?))?;
 
-    items.into_iter().map(|x| x.unwrap()).collect()
+    let result = items.into_iter().map(|x| x.unwrap()).collect();
+    Ok(result)
 }
 
 // ----------------------------------------------------------------------------
@@ -243,8 +240,8 @@ pub struct PackInfo {
 
 impl PackInfo {
     pub fn get_pack_list(conn: &DBAccessManager) -> Result<Vec<Self>, rusqlite::Error> {
-        let mut stmt = conn.connection.prepare(sql_stmt::PACK_INFO).unwrap();
-        let mut item_stmt = conn.connection.prepare(sql_stmt::PACK_ITEM).unwrap();
+        let mut stmt = conn.connection.prepare(sql_stmt::PACK_INFO)?;
+        let mut item_stmt = conn.connection.prepare(sql_stmt::PACK_ITEM)?;
         let packs = stmt
             .query_map(params![], |row| {
                 let name = row.get(0)?;
@@ -260,8 +257,7 @@ impl PackInfo {
                             item_type: row.get(1)?,
                             is_available: row.get::<usize, String>(2)? == "t",
                         })
-                    })
-                    .unwrap();
+                    })?;
 
                 Ok(PackInfo {
                     name,
@@ -271,8 +267,7 @@ impl PackInfo {
                     discount_from,
                     discount_to,
                 })
-            })
-            .unwrap();
+            })?;
         Ok(packs.into_iter().map(|x| x.unwrap()).collect())
     }
 }
@@ -297,7 +292,7 @@ pub struct GameInfo {
 
 impl GameInfo {
     pub fn new(conn: &DBAccessManager) -> Result<Self, rusqlite::Error> {
-        let mut stmt = conn.connection.prepare(sql_stmt::LEVEL_STEP).unwrap();
+        let mut stmt = conn.connection.prepare(sql_stmt::LEVEL_STEP)?;
         let mut level_steps = Vec::new();
         let steps = stmt.query_map(params![], |row| {
             Ok(LevelStep {
@@ -313,7 +308,7 @@ impl GameInfo {
         let (mut curr_ts, mut max_stamina, mut stamina_recover_tick) = (0, 0, 0);
         let (mut core_exp, mut world_ranking_enabled, mut is_byd_chapter_unlocked) =
             (250, false, false);
-        let mut stmt = conn.connection.prepare(sql_stmt::GAME_INFO).unwrap();
+        let mut stmt = conn.connection.prepare(sql_stmt::GAME_INFO)?;
         stmt.query_row(params![], |row| {
             curr_ts = row.get("now")?;
             max_stamina = row.get("max_stamina")?;
@@ -381,15 +376,15 @@ impl MapInfo {
     fn get_map_affinity(&mut self, conn: &DBAccessManager) -> Result<(), rusqlite::Error> {
         let mut characters = Vec::new();
         let mut multiplier = Vec::new();
-        let mut stmt = conn.connection.prepare(sql_stmt::MAP_AFFINITY).unwrap();
+        let mut stmt = conn.connection.prepare(sql_stmt::MAP_AFFINITY)?;
         let infoes = stmt
             .query_map(&[&self.map_id], |row| {
                 Ok((row.get("part_id")?, row.get("multiplier")?))
             })
-            .unwrap();
+            ?;
 
         for info in infoes {
-            let info = info.unwrap();
+            let info = info?;
             characters.push(info.0);
             multiplier.push(info.1);
         }
@@ -400,7 +395,7 @@ impl MapInfo {
     }
 
     fn get_rewards(&mut self, conn: &DBAccessManager) -> Result<(), rusqlite::Error> {
-        let mut stmt = conn.connection.prepare(sql_stmt::MAP_REWARD).unwrap();
+        let mut stmt = conn.connection.prepare(sql_stmt::MAP_REWARD)?;
         let rewards = stmt
             .query_map(params![self.map_id], |row| {
                 Ok((
@@ -412,9 +407,9 @@ impl MapInfo {
                     },
                 ))
             })
-            .unwrap();
+            ?;
         for item in rewards {
-            let item = item.unwrap();
+            let item = item?;
             self.rewards.push(MapReward {
                 items: vec![item.1],
                 position: item.0,
@@ -440,7 +435,7 @@ impl MapInfoList {
             maps: Vec::new(),
         };
 
-        let mut stmt = conn.connection.prepare(sql_stmt::MAP_INFO).unwrap();
+        let mut stmt = conn.connection.prepare(sql_stmt::MAP_INFO)?;
         let map_infoes = stmt
             .query_map(&[&user_id], |row| {
                 let map_id = row.get("map_id")?;
@@ -467,10 +462,9 @@ impl MapInfoList {
                     character_affinity: Vec::new(),
                     rewards: Vec::new(),
                 })
-            })
-            .unwrap();
+            })?;
         for map_info in map_infoes {
-            let mut map_info = map_info.unwrap();
+            let mut map_info = map_info?;
             map_info.get_map_affinity(conn)?;
             map_info.get_rewards(conn)?;
             info_list.maps.push(map_info);

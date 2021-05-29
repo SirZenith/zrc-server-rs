@@ -50,7 +50,10 @@ pub async fn score_lookup(user_id: isize, conn: DBAccessManager) -> Result<impl 
         Err(_) => Ok(warp::reply::html("".to_string())),
         Ok(records) => {
             let (r10, b30) = conn.get_r10_and_b30(user_id).unwrap();
-            let user_info = conn.get_minimum_user_info(user_id).unwrap();
+            let user_info = match conn.get_minimum_user_info(user_id) {
+                Ok(info) => info,
+                Err(err) => return Err(warp::reject::custom(err)),
+            };
             let rating_level = user_info.get_rating_level();
             let template = RecordsTemplate {
                 user_name: user_info.name,
