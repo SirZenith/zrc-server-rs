@@ -17,6 +17,7 @@ log = "0.4.14"
 md5 = "0.7.0"
 r2d2_sqlite = "0.18.0"
 r2d2 = "0.8.9"
+rand = "0.8"
 rusqlite = "0.25.3"
 simple_logger = "1.11.0"
 serde = { version = "1.0.126", features = ["derive"] }

@@ -14,7 +14,7 @@ pub async fn get_download_list(
         &info_group.0,
         &info_group.1,
         &info_group.2,
-    );
+    ).map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
     let result = ResponseContainer {
         success: true,
         value: checksums,

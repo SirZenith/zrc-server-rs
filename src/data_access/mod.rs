@@ -245,6 +245,10 @@ pub enum ZrcDBError {
     Internal(String, rusqlite::Error),
     #[error("other error, context - {0}")]
     Other(String),
+    #[error("user with the same name already exists")]
+    UserNameExists,
+    #[error("this email is already used")]
+    EmailExists,
 }
 
 impl warp::reject::Reject for ZrcDBError {}
@@ -260,7 +264,8 @@ impl DBAccessManager {
         DBAccessManager { connection }
     }
 
-    pub fn map_err(msg: String, err: Option<rusqlite::Error>) -> ZrcDBError {
+    pub fn map_err(msg: &str, err: Option<rusqlite::Error>) -> ZrcDBError {
+        let msg = msg.to_string();
         match err {
             None => ZrcDBError::Other(msg),
             Some(e) => match e {
@@ -286,7 +291,7 @@ impl DBAccessManager {
         hostname: &str,
         prefix_static_file: &str,
         songs_dirname: &str,
-    ) -> dlc::DlcInfoList {
+    ) -> ZrcDBResult<dlc::DlcInfoList> {
         let mut infoes = HashMap::new();
         let song_id_condition = if !requests.song_ids.is_empty() {
             format!(
@@ -302,36 +307,59 @@ impl DBAccessManager {
             String::new()
         };
 
+        let table_name = "pack_purchase_info as pur";
+        let condition = "pur.pack_name = song.pack_name";
         self.get_purchase_form_table(
             user_id,
             &mut infoes,
             requests.need_url,
             sql_stmt::QUERY_DL,
-            "pack_purchase_info as pur",
-            "pur.pack_name = song.pack_name",
+            table_name,
+            condition,
             &song_id_condition,
             hostname,
             prefix_static_file,
             songs_dirname,
-        );
-        self.get_purchase_form_table(
-            user_id,
-            &mut infoes,
-            requests.need_url,
-            sql_stmt::QUERY_DL,
-            "single_purchase_info pur",
-            "pur.song_id = song.song_id",
-            &song_id_condition,
-            hostname,
-            prefix_static_file,
-            songs_dirname,
-        );
+        )
+        .map_err(|e| {
+            DBAccessManager::map_err(
+                &format!(
+                    "while query purchase data from table '{}' with condition '{}'",
+                    table_name, condition
+                ),
+                Some(e),
+            )
+        })?;
 
-        infoes
+        let table_name = "single_purchase_info pur";
+        let condition = "pur.song_id = song.song_id";
+        self.get_purchase_form_table(
+            user_id,
+            &mut infoes,
+            requests.need_url,
+            sql_stmt::QUERY_DL,
+            table_name,
+            condition,
+            &song_id_condition,
+            hostname,
+            prefix_static_file,
+            songs_dirname,
+        )
+        .map_err(|e| {
+            DBAccessManager::map_err(
+                &format!(
+                    "while query purchase data from table '{}' with condition '{}'",
+                    table_name, condition
+                ),
+                Some(e),
+            )
+        })?;
+
+        Ok(infoes)
     }
 
     /// Return all DLC info (checksum only).
-    pub fn get_all_purchase_dl(&self, user_id: isize) -> dlc::DlcInfoList {
+    pub fn get_all_purchase_dl(&self, user_id: isize) -> ZrcDBResult<dlc::DlcInfoList> {
         self.get_purchase_dl(user_id, DLRequest::empty_request(), "", "", "")
     }
 
@@ -348,8 +376,8 @@ impl DBAccessManager {
         hostname: &str,
         prefix_static_file: &str,
         songs_dirname: &str,
-    ) {
-        let items = self.get_dl_items(user_id, stmt, table_name, condition, song_id_condition);
+    ) -> Result<(), rusqlite::Error> {
+        let items = self.get_dl_items(user_id, stmt, table_name, condition, song_id_condition)?;
         for item in items.into_iter().filter(|i| i.chart_dl || i.song_dl) {
             let info = infoes.entry(item.song_id.clone()).or_insert(DlcInfo {
                 audio: InfoItem::new(),
@@ -372,6 +400,7 @@ impl DBAccessManager {
                 }
             }
         }
+        Ok(())
     }
 
     fn get_dl_items(
@@ -381,7 +410,7 @@ impl DBAccessManager {
         table_name: &str,
         condition: &str,
         song_id_condition: &str,
-    ) -> Vec<dlc::DLItem> {
+    ) -> Result<Vec<dlc::DLItem>, rusqlite::Error> {
         use strfmt::strfmt;
 
         let mut var = HashMap::new();
@@ -389,24 +418,18 @@ impl DBAccessManager {
         var.insert("query_condition".to_string(), condition);
         var.insert("song_id_condition".to_string(), song_id_condition);
         // TODO: Possible error point.
-        let mut stmt = self
-            .connection
-            .prepare(&strfmt(stmt, &var).unwrap())
-            .unwrap();
-        // TODO: Possible error point.
-        let items = stmt
-            .query_map(&[&user_id], |row| {
-                Ok(DLItem {
-                    song_id: row.get::<&str, String>("song_id")?,
-                    audio_checksum: row.get::<&str, String>("audio_checksum")?,
-                    song_dl: row.get::<&str, String>("song_dl")? == "t",
-                    difficulty: row.get::<&str, String>("difficulty")?,
-                    chart_checksum: row.get::<&str, String>("chart_checksum")?,
-                    chart_dl: row.get::<&str, String>("chart_dl")? == "t",
-                })
+        let mut stmt = self.connection.prepare(&strfmt(stmt, &var).unwrap())?;
+        let items = stmt.query_map(&[&user_id], |row| {
+            Ok(DLItem {
+                song_id: row.get::<&str, String>("song_id")?,
+                audio_checksum: row.get::<&str, String>("audio_checksum")?,
+                song_dl: row.get::<&str, String>("song_dl")? == "t",
+                difficulty: row.get::<&str, String>("difficulty")?,
+                chart_checksum: row.get::<&str, String>("chart_checksum")?,
+                chart_dl: row.get::<&str, String>("chart_dl")? == "t",
             })
-            .unwrap();
-        items.map(|i| i.unwrap()).collect()
+        })?;
+        Ok(items.map(|i| i.unwrap()).collect())
     }
 }
 
@@ -449,49 +472,121 @@ impl DBAccessManager {
 // ----------------------------------------------------------------------------
 /// Getting and setting basic info for user log in.
 impl DBAccessManager {
-    pub fn login(&self, name: &str, pwd_hash: &str) -> ZrcDBResult<isize> {
-        self.connection.query_row(sql_stmt::LOGIN, params![name, pwd_hash], |row| Ok(row.get("user_id")?)).map_err(|e|
-            DBAccessManager::map_err("while querying login id".to_string(), Some(e))
+    fn is_user_exists(tx: &rusqlite::Transaction, user_name: &str, email: &str) -> Result<(), ZrcDBError> {
+        match tx.query_row(
+            sql_stmt::CHECK_USER_NAME_EXISTS, [user_name],
+            |row| Ok(row.get::<usize, usize>(0)?)
+        ) {
+            Ok(_) => return Err(ZrcDBError::UserNameExists),
+            Err(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => {},
+                _ => return Err(ZrcDBError::Internal("while check existance of user name".to_string(), e))
+            }
+        }
+        match tx.query_row(
+            sql_stmt::CHECK_EMAIL_EXISTS, [email],
+            |row| Ok(row.get::<usize, usize>(0)?)
+        ) {
+            Ok(_) => return Err(ZrcDBError::EmailExists),
+            Err(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => {},
+                _ => return Err(ZrcDBError::Internal("while check existance of email".to_string(), e))
+            }
+        }
+        Ok(())
+    }
+
+    pub fn signup(
+        &mut self,
+        user_name: &str,
+        pwd_hash: &str,
+        email: &str,
+        device_id: &str,
+    ) -> ZrcDBResult<isize> {
+        use rand::{thread_rng, Rng};
+
+        let tx = self.connection.transaction().map_err(|e| {
+            DBAccessManager::map_err("failed to make transication for signing up", Some(e))
+        })?;
+
+        let user_id = tx
+            .query_row(sql_stmt::GET_NEW_USER_ID, [], |row| Ok(row.get("user_id")?))
+            .map_err(|e| DBAccessManager::map_err("while getting new user_id", Some(e)))?;
+
+        let mut rng = thread_rng();
+        let mut user_code: u32 = rng.gen_range(0..=999_999_999);
+        loop {
+            match tx.query_row(sql_stmt::CHECK_USER_CODE_EXISTS, [user_code], |row| {
+                Ok(row.get::<usize, usize>(0)?)
+            }) {
+                Ok(_) => user_code = (user_code + 1) % 1_000_000_000,
+                Err(e) => match e {
+                    rusqlite::Error::QueryReturnedNoRows => break,
+                    _ => {
+                        return Err(DBAccessManager::map_err(
+                            "while generating user code",
+                            Some(e),
+                        ))
+                    }
+                },
+            }
+        }
+
+        DBAccessManager::is_user_exists(&tx, user_name, email)?;
+
+        tx.execute(
+            sql_stmt::SING_UP,
+            params![user_id, device_id, email, pwd_hash, user_name, user_code, user_name],
         )
+        .map_err(|e| DBAccessManager::map_err("while signing up", Some(e)))?;
+
+        tx.commit()
+            .map_err(|e| DBAccessManager::map_err("while commit sing up data", Some(e)))?;
+
+        Ok(user_id)
+    }
+
+    pub fn login(&self, name: &str, pwd_hash: &str) -> ZrcDBResult<isize> {
+        self.connection
+            .query_row(sql_stmt::LOGIN, params![name, pwd_hash], |row| {
+                Ok(row.get("user_id")?)
+            })
+            .map_err(|e| DBAccessManager::map_err("while querying login id", Some(e)))
     }
 
     pub fn get_user_info(&self, user_id: isize) -> ZrcDBResult<UserInfo> {
-        UserInfo::new(&self, user_id)
-            .map_err(|e| DBAccessManager::map_err("while querying user info".to_string(), Some(e)))
+        UserInfo::new(&self, user_id).map_err(|e| {
+            DBAccessManager::map_err(
+                &format!("while querying user info for user id '{}'", user_id),
+                Some(e),
+            )
+        })
     }
 
-    pub fn get_minimum_user_info(
-        &self,
-        user_id: isize,
-    ) -> ZrcDBResult<UserInfoForScoreLookup> {
-        UserInfoForScoreLookup::new(&self, user_id).map_err(|e| {
-            DBAccessManager::map_err("while querying minimum user info".to_string(), Some(e))
-        })
+    pub fn get_minimum_user_info(&self, user_id: isize) -> ZrcDBResult<UserInfoForScoreLookup> {
+        UserInfoForScoreLookup::new(&self, user_id)
+            .map_err(|e| DBAccessManager::map_err("while querying minimum user info", Some(e)))
     }
 
     pub fn get_game_info(&self) -> ZrcDBResult<GameInfo> {
         GameInfo::new(&self)
-            .map_err(|e| DBAccessManager::map_err("while querying game info".to_string(), Some(e)))
+            .map_err(|e| DBAccessManager::map_err("while querying game info", Some(e)))
     }
 
     pub fn get_pack_info(&self) -> ZrcDBResult<Vec<PackInfo>> {
         PackInfo::get_pack_list(&self)
-            .map_err(|e| DBAccessManager::map_err("while querying pack info".to_string(), Some(e)))
+            .map_err(|e| DBAccessManager::map_err("while querying pack info", Some(e)))
     }
 
     pub fn get_map_info(&self, user_id: isize) -> ZrcDBResult<MapInfoList> {
         MapInfoList::new(&self, user_id)
-            .map_err(|e| DBAccessManager::map_err("while querying map info".to_string(), Some(e)))
+            .map_err(|e| DBAccessManager::map_err("while querying map info", Some(e)))
     }
 
-    pub fn set_favorite_character(
-        &self,
-        user_id: isize,
-        char_id: isize,
-    ) -> ZrcDBResult<usize> {
+    pub fn set_favorite_character(&self, user_id: isize, char_id: isize) -> ZrcDBResult<usize> {
         self.connection
             .execute(sql_stmt::SET_FAVORITE_CHARACTER, params![char_id, user_id])
-            .map_err(|e| DBAccessManager::map_err("while querying map info".to_string(), Some(e)))
+            .map_err(|e| DBAccessManager::map_err("while querying map info", Some(e)))
     }
 
     pub fn set_user_setting(
@@ -507,7 +602,7 @@ impl DBAccessManager {
         let value = if value { "t" } else { "" };
         let stmt = &strfmt(sql_stmt::SET_USER_SETTING, &var).map_err(|e| {
             DBAccessManager::map_err(
-                format!(
+                &format!(
                     "while preparing statement '{}': {}",
                     sql_stmt::SET_USER_SETTING,
                     e
@@ -517,7 +612,7 @@ impl DBAccessManager {
         })?;
         self.connection
             .execute(stmt, params![value, user_id])
-            .map_err(|e| DBAccessManager::map_err("while set user setting".to_string(), Some(e)))
+            .map_err(|e| DBAccessManager::map_err("while set user setting", Some(e)))
     }
 }
 
@@ -558,9 +653,8 @@ impl DBAccessManager {
     }
 
     pub fn get_r10_and_b30(&self, user_id: isize) -> ZrcDBResult<(f64, f64)> {
-        self._get_r10_and_b30(user_id).map_err(|e| {
-            DBAccessManager::map_err("while querying r10 and b30".to_string(), Some(e))
-        })
+        self._get_r10_and_b30(user_id)
+            .map_err(|e| DBAccessManager::map_err("while querying r10 and b30", Some(e)))
     }
 
     fn _get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), rusqlite::Error> {

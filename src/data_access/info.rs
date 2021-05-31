@@ -126,7 +126,7 @@ impl UserInfo {
         let mut stmt = conn
             .connection
             .prepare(sql_stmt::USER_MOST_RECENT_SCORE)?;
-        let score = stmt
+        let score = match stmt
             .query_row(&[&self.user_id], |row| {
                 Ok(MostRecentScore {
                     song_id: row.get("song_id")?,
@@ -142,7 +142,13 @@ impl UserInfo {
                     clear_type: row.get("clear_type")?,
                     best_clear_type: row.get("best_clear_type")?,
                 })
-            })?;
+            }) {
+                Ok(s) => s,
+                Err(e) => match e {
+                    rusqlite::Error::QueryReturnedNoRows => return Ok(()),
+                    _ => return Err(e)
+                }
+            };
         self.recent_score.push(score);
         Ok(())
     }
@@ -212,11 +218,16 @@ fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isi
             "select {} from {} where user_id = {}",
             column, table, user_id
         ))?;
-    let items = stmt
-        .query_map([], |row| Ok(row.get::<usize, String>(0)?))?;
-
-    let result = items.into_iter().map(|x| x.unwrap()).collect();
-    Ok(result)
+    let items = match stmt.query_map(
+        [], |row| Ok(row.get::<usize, String>(0)?)
+    ) {
+        Ok(i) => i,
+        Err(e) => match e {
+            rusqlite::Error::QueryReturnedNoRows => return Ok(Vec::new()),
+            _ => return Err(e),
+        }
+    };
+    Ok(items.into_iter().map(|x| x.unwrap()).collect())
 }
 
 // ----------------------------------------------------------------------------

@@ -24,9 +24,9 @@ const VERSION_TOO_OLD: i32 = 5; // 请更新Arcaea到最新版本
 #[allow(dead_code)]
 const BLOCKED_IP: i32 = 100; // 无法在此ip地址下登录游戏
 #[allow(dead_code)]
-const USERNAME_DUPLICATED: i32 = 101; // 用户名占用
+const USERNAME_ALREADY_TAKEN: i32 = 101; // 用户名占用
 #[allow(dead_code)]
-const EMAIL_DUPLICATED: i32 = 102; // 电子邮箱已注册
+const EMAIL_ALREADY_USED: i32 = 102; // 电子邮箱已注册
 #[allow(dead_code)]
 const DEVICE_ID_DUPLICATED: i32 = 103; // 已有一个账号由此设备创建
 #[allow(dead_code)]
@@ -109,6 +109,10 @@ pub enum ZrcSVError {
     DBError(ZrcDBError),
     #[error("user not found")]
     UserNotFound,
+    #[error("this user name is already taken")]
+    UserNameExists,
+    #[error("this email is already used")]
+    EmailExists,
     #[error("invalid token")]
     InvalidToken(String),
     #[error("JWT token creation error")]
@@ -117,6 +121,8 @@ pub enum ZrcSVError {
     NoAuthHeader,
     #[error("template rendering error - {0}")]
     TemplateError(askama::Error),
+    #[error("incomplete form, key '{0}' needed")]
+    IncompleteForm(String),
 }
 
 impl warp::reject::Reject for ZrcSVError {}
@@ -132,13 +138,16 @@ pub async fn handle_rejection(
         match e {
             ZrcSVError::DBError(e) => handle_dberror(e),
             ZrcSVError::UserNotFound => (StatusCode::FORBIDDEN, format!("user not found, check your user name/ email and password"), WRONG_USERNAME_OR_PWD),
+            ZrcSVError::UserNameExists => (StatusCode::CONFLICT, format!("{}", e), USERNAME_ALREADY_TAKEN),
+            ZrcSVError::EmailExists => (StatusCode::CONFLICT, format!("{}", e), EMAIL_ALREADY_USED),
             ZrcSVError::InvalidToken(msg) => (StatusCode::FORBIDDEN, format!("invalid token, {}", msg), AUTH_FAILED),
             ZrcSVError::JWTTokenCreationError => (StatusCode::FORBIDDEN, "authentication token creation failed".to_string(), FUNCTION_NOT_AVAILABLE),
             ZrcSVError::NoAuthHeader => (StatusCode::FORBIDDEN, "can't read authentication header".to_string(), AUTH_FAILED),
             ZrcSVError::TemplateError(e) => {
                 log::error!("template rendering error, {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "template rendering error".to_string(), UNKNOWN_ERROR)
-            }
+            },
+            ZrcSVError::IncompleteForm(_) => (StatusCode::BAD_REQUEST, format!("{}", e), 1),
         }
     } else {
         log::error!("unhandled error, {:?}", err);
@@ -162,13 +171,15 @@ fn handle_dberror(err: &ZrcDBError) -> (StatusCode, String, i32) {
             (StatusCode::NOT_FOUND, "data needed not found".to_string(), UNKNOWN_ERROR)
         }
         ZrcDBError::Internal(msg, error) => {
-            log::error!("data access internal error, {}, {}", msg, error);
+            log::error!("database access internal error, {}, {}", msg, error);
             (StatusCode::INTERNAL_SERVER_ERROR, "server side error".to_string(), UNKNOWN_ERROR)
         }
         ZrcDBError::Other(msg) => {
-            log::error!("other data access error, {}", msg);
+            log::error!("other database access error, {}", msg);
             (StatusCode::INTERNAL_SERVER_ERROR, "unknown database error".to_string(), UNKNOWN_ERROR)
         }
+        ZrcDBError::UserNameExists => (StatusCode::CONFLICT, format!("{}", err), USERNAME_ALREADY_TAKEN),
+        ZrcDBError::EmailExists => (StatusCode::CONFLICT, format!("{}", err), EMAIL_ALREADY_USED),
     };
     (status, message, error_code)
 }

@@ -100,6 +100,31 @@ pub const PACK_ITEM: &str = r#"
         pack_name = ?
 "#;
 
+pub const GET_NEW_USER_ID: &str = r#"
+    select max(user_id) + 1 as user_id from player
+"#;
+
+pub const CHECK_USER_NAME_EXISTS: &str = r#"
+    select 1 from player where lower(user_name) = lower(?1)
+"#;
+
+pub const CHECK_EMAIL_EXISTS: &str = r#"
+    select 1 from player where email = ?1
+"#;
+
+pub const CHECK_USER_CODE_EXISTS: &str = r#"
+    select 1 from player where user_code = ?1
+"#;
+
+pub const SING_UP: &str = r#"
+    insert into player(
+        user_id, last_device_id, email, pwdhash,
+        user_name, user_code, display_name
+    ) values(
+        ?1, ?2, ?3, ?4, ?5, ?6, ?7
+    )
+"#;
+
 pub const LOGIN: &str = r#"
     select
         user_id

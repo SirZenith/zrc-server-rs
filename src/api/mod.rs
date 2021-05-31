@@ -33,6 +33,13 @@ fn respond_ok<T: Serialize>(result: T) -> ZrcSVResult<impl warp::Reply> {
     ))
 }
 
+fn get_from_form<'a>(form: &'a HashMap<String, String>, key: &str) -> Result<&'a String, ZrcSVError> {
+    match form.get(&key.to_string()) {
+        Some(v) => Ok(v),
+        None => return Err(ZrcSVError::IncompleteForm(key.to_string()))
+    }
+}
+
 pub fn api_filter(
     pool: SqlitePool,
     hostname: String,
@@ -47,6 +54,7 @@ pub fn api_filter(
         .and(with_auth(is_auth_off))
         .and(warp::fs::dir(document_root))
         .map(|_, it| it);
+    let signup_route = signup(pool.clone());
     let login_auth = login(is_auth_off, pool.clone());
     let get_info = game_info(pool.clone())
         .or(pack_info(pool.clone()))
@@ -72,6 +80,7 @@ pub fn api_filter(
 
     let mut route = welcome
         .or(file_server)
+        .or(signup_route)
         .or(login_auth)
         .or(get_info)
         .or(game_play)
@@ -80,6 +89,14 @@ pub fn api_filter(
         route = warp::path(prefix).and(route).boxed();
     }
     route.recover(api::error::handle_rejection).boxed()
+}
+
+// GET /user/
+fn signup(pool: SqlitePool) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("user")
+        .and(warp::body::form())
+        .and(with_db_access_manager(pool))
+        .and_then(info::signup)
 }
 
 // GET /auth/login

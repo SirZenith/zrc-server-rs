@@ -87,9 +87,9 @@ fn check_basic_token(headers: HeaderMap<HeaderValue>, conn: DBAccessManager) -> 
     Ok(user_id)
 }
 
-fn create_jwt(user_id: isize) -> Result<String, ZrcSVError> {
+pub fn create_jwt(user_id: isize) -> Result<String, ZrcSVError> {
     let expiration = Utc::now()
-        .checked_add_signed(chrono::Duration::seconds(60))
+        .checked_add_signed(chrono::Duration::days(10))
         .expect("valid timestamp")
         .timestamp();
 

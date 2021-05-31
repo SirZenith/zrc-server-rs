@@ -10,6 +10,12 @@ pub struct LoginToken {
     error_code: i32,
 }
 
+#[derive(Serialize)]
+pub struct SignupResponse {
+    user_id: isize,
+    access_token: String,
+}
+
 #[derive(Deserialize)]
 pub struct AggregateEndPoint {
     endpoint: String,
@@ -19,6 +25,47 @@ pub struct AggregateEndPoint {
 #[derive(Deserialize)]
 pub struct AggregateCall {
     calls: String,
+}
+
+// POST /user/
+pub async fn signup(form: HashMap<String, String>, mut conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
+    // name=abcd&password=00000000&email=a%40b.com&device_id=4C8C520B-28CF-422A-B773-47126BA5F800&platform=ios
+    let name = get_from_form(&form, "name").map_err(
+        |e| warp::reject::custom(e)
+    )?;
+    let password = get_from_form(&form, "password").map_err(
+        |e| warp::reject::custom(e)
+    )?;
+    let email = get_from_form(&form, "email").map_err(
+        |e| warp::reject::custom(e)
+    )?;
+    let device_id = get_from_form(&form, "device_id").map_err(
+        |e| warp::reject::custom(e)
+    )?;
+    let _platform = get_from_form(&form, "platform").map_err(
+        |e| warp::reject::custom(e)
+    )?;
+
+    let pwd_hash = auth::hash_pwd(password);
+    let user_id = conn.signup(name, &pwd_hash, email, device_id).map_err(|e| {
+        let err = match e {
+            ZrcDBError::UserNameExists => ZrcSVError::UserNameExists,
+            ZrcDBError::EmailExists => ZrcSVError::EmailExists,
+            _ => ZrcSVError::DBError(e)
+        };
+        warp::reject::custom(err)
+    })?;
+    let access_token = auth::create_jwt(user_id).map_err(|e| warp::reject::custom(e))?;
+
+    respond_ok(ResponseContainer {
+        success: true,
+        value: SignupResponse {
+            user_id,
+            access_token,
+        },
+        error_code: 0,
+        error_msg: String::new()
+    })
 }
 
 // GET /auth/login
@@ -40,17 +87,32 @@ pub async fn aggregate(call: AggregateCall, user_id: isize, conn: DBAccessManage
     for call in endpoints {
         let content = match call.endpoint.as_str() {
             "/user/me" => {
-                serde_json::to_string(&conn.get_user_info(user_id).unwrap()).unwrap()
+                serde_json::to_string(
+                    &conn.get_user_info(user_id)
+                        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?
+                ).unwrap()
             }
             "/purchase/bundle/pack" => {
-                serde_json::to_string(&conn.get_pack_info().unwrap()).unwrap()
+                serde_json::to_string(
+                    &conn.get_pack_info()
+                        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?
+                ).unwrap()
             }
             "/serve/download/me/song?url=false" => {
-                serde_json::to_string(&conn.get_all_purchase_dl(user_id)).unwrap()
+                serde_json::to_string(
+                    &conn.get_all_purchase_dl(user_id)
+                        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?
+                ).unwrap()
             }
-            "/game/info" => serde_json::to_string(&conn.get_game_info().unwrap()).unwrap(),
+            "/game/info" => serde_json::to_string(
+                &conn.get_game_info()
+                    .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?
+            ).unwrap(),
             "/world/map/me" => {
-                serde_json::to_string(&conn.get_map_info(user_id).unwrap()).unwrap()
+                serde_json::to_string(
+                    &conn.get_map_info(user_id)
+                        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?
+                ).unwrap()
             }
             _ => serde_json::to_string(&Vec::<()>::new()).unwrap(),
         };
@@ -106,11 +168,9 @@ pub async fn user_setting(
     user_id: isize,
     conn: DBAccessManager,
 ) -> ZrcSVResult<impl warp::Reply> {
-    let value = match setting.get("value") {
-        Some(v) => v,
-        // TODO: make proper rejection.
-        None => return Err(warp::reject::not_found()),
-    };
+    let value = get_from_form(&setting, "value").map_err(
+        |e| warp::reject::custom(e)
+    )?;
     if option == "favorite_character" {
         // TODO: remove this unwrap
         let char_id = value.parse::<isize>().unwrap();
