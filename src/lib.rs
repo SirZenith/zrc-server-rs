@@ -7,7 +7,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use data_access::*;
-use structopt::clap::arg_enum;
 use lazy_static::lazy_static;
 use log;
 use r2d2::{Pool, PooledConnection};
@@ -19,31 +18,6 @@ use structopt::StructOpt;
 use warp::Filter;
 
 const STATIC_USER_ID: isize = 1;
-
-arg_enum! {
-    #[derive(Debug)]
-    enum LogLevel {
-        Off,
-        Error,
-        Warn,
-        Info,
-        Debug,
-        Trace,
-    }
-}
-
-impl LogLevel {
-    fn to_level_filter(&self) -> log::LevelFilter {
-        match self {
-            LogLevel::Off => log::LevelFilter::Off,
-            LogLevel::Error => log::LevelFilter::Error,
-            LogLevel::Warn => log::LevelFilter::Warn,
-            LogLevel::Info => log::LevelFilter::Info,
-            LogLevel::Debug => log::LevelFilter::Debug,
-            LogLevel::Trace => log::LevelFilter::Trace,
-        }
-    }
-}
 
 #[derive(StructOpt)]
 pub struct Cli {
@@ -76,8 +50,8 @@ pub struct Cli {
     #[structopt(long = "no-auth", help = "Whether to turn off authentication")]
     is_auth_off: bool,
 
-    #[structopt(long = "log-level", possible_values = &LogLevel::variants(), case_insensitive = true, default_value = "info")]
-    log_level: LogLevel
+    #[structopt(long = "log-level", default_value = "info")]
+    log_level: log::LevelFilter
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -89,7 +63,7 @@ pub async fn start_serving(argv: Vec<String>) {
     let cli = Cli::from_iter(argv.iter());
 
     SimpleLogger::new()
-        .with_level(cli.log_level.to_level_filter())
+        .with_level(cli.log_level)
         .init()
         .unwrap();
 
