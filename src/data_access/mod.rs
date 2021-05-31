@@ -249,6 +249,8 @@ pub enum ZrcDBError {
 
 impl warp::reject::Reject for ZrcDBError {}
 
+type ZrcDBResult<T> = Result<T, ZrcDBError>;
+
 pub struct DBAccessManager {
     connection: PooledSqlite,
 }
@@ -256,6 +258,16 @@ pub struct DBAccessManager {
 impl DBAccessManager {
     pub fn new(connection: PooledSqlite) -> DBAccessManager {
         DBAccessManager { connection }
+    }
+
+    pub fn map_err(msg: String, err: Option<rusqlite::Error>) -> ZrcDBError {
+        match err {
+            None => ZrcDBError::Other(msg),
+            Some(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => ZrcDBError::DataNotFound(msg),
+                _ => ZrcDBError::Internal(msg, e),
+            },
+        }
     }
 }
 
@@ -437,49 +449,49 @@ impl DBAccessManager {
 // ----------------------------------------------------------------------------
 /// Getting and setting basic info for user log in.
 impl DBAccessManager {
-    pub fn get_user_info(&self, user_id: isize) -> Result<UserInfo, ZrcDBError> {
-        UserInfo::new(&self, user_id).map_err(
-        |e| ZrcDBError::Internal("while querying user info".to_string(), e)
+    pub fn login(&self, name: &str, pwd_hash: &str) -> ZrcDBResult<isize> {
+        self.connection.query_row(sql_stmt::LOGIN, params![name, pwd_hash], |row| Ok(row.get("user_id")?)).map_err(|e|
+            DBAccessManager::map_err("while querying login id".to_string(), Some(e))
         )
+    }
+
+    pub fn get_user_info(&self, user_id: isize) -> ZrcDBResult<UserInfo> {
+        UserInfo::new(&self, user_id)
+            .map_err(|e| DBAccessManager::map_err("while querying user info".to_string(), Some(e)))
     }
 
     pub fn get_minimum_user_info(
         &self,
         user_id: isize,
-    ) -> Result<UserInfoForScoreLookup, ZrcDBError> {
-        UserInfoForScoreLookup::new(&self, user_id).map_err(
-            |e| ZrcDBError::Internal("while querying minimum user info".to_string(), e)
-        )
+    ) -> ZrcDBResult<UserInfoForScoreLookup> {
+        UserInfoForScoreLookup::new(&self, user_id).map_err(|e| {
+            DBAccessManager::map_err("while querying minimum user info".to_string(), Some(e))
+        })
     }
 
-    pub fn get_game_info(&self) -> Result<GameInfo, ZrcDBError> {
-        GameInfo::new(&self).map_err(
-            |e| ZrcDBError::Internal("while querying game info".to_string(), e)
-        )
+    pub fn get_game_info(&self) -> ZrcDBResult<GameInfo> {
+        GameInfo::new(&self)
+            .map_err(|e| DBAccessManager::map_err("while querying game info".to_string(), Some(e)))
     }
 
-    pub fn get_pack_info(&self) -> Result<Vec<PackInfo>, ZrcDBError> {
-        PackInfo::get_pack_list(&self).map_err(
-            |e| ZrcDBError::Internal("while querying pack info".to_string(), e)
-        )
+    pub fn get_pack_info(&self) -> ZrcDBResult<Vec<PackInfo>> {
+        PackInfo::get_pack_list(&self)
+            .map_err(|e| DBAccessManager::map_err("while querying pack info".to_string(), Some(e)))
     }
 
-    pub fn get_map_info(&self, user_id: isize) -> Result<MapInfoList, ZrcDBError> {
-        MapInfoList::new(&self, user_id).map_err(
-            |e| ZrcDBError::Internal("while querying map info".to_string(), e)
-        )
+    pub fn get_map_info(&self, user_id: isize) -> ZrcDBResult<MapInfoList> {
+        MapInfoList::new(&self, user_id)
+            .map_err(|e| DBAccessManager::map_err("while querying map info".to_string(), Some(e)))
     }
 
     pub fn set_favorite_character(
         &self,
         user_id: isize,
         char_id: isize,
-    ) -> Result<usize, ZrcDBError> {
+    ) -> ZrcDBResult<usize> {
         self.connection
             .execute(sql_stmt::SET_FAVORITE_CHARACTER, params![char_id, user_id])
-            .map_err(
-                |e| ZrcDBError::Internal("while querying map info".to_string(), e)
-            )
+            .map_err(|e| DBAccessManager::map_err("while querying map info".to_string(), Some(e)))
     }
 
     pub fn set_user_setting(
@@ -487,18 +499,25 @@ impl DBAccessManager {
         user_id: isize,
         option_name: String,
         value: bool,
-    ) -> Result<usize, ZrcDBError> {
+    ) -> ZrcDBResult<usize> {
         use strfmt::strfmt;
 
         let mut var = HashMap::new();
         var.insert("option_name".to_string(), option_name);
         let value = if value { "t" } else { "" };
-        let stmt = &strfmt(sql_stmt::SET_USER_SETTING, &var).map_err(
-            |e| ZrcDBError::Other(format!("while preparing statement '{}': {}", sql_stmt::SET_USER_SETTING, e))
-        )?;
+        let stmt = &strfmt(sql_stmt::SET_USER_SETTING, &var).map_err(|e| {
+            DBAccessManager::map_err(
+                format!(
+                    "while preparing statement '{}': {}",
+                    sql_stmt::SET_USER_SETTING,
+                    e
+                ),
+                None,
+            )
+        })?;
         self.connection
             .execute(stmt, params![value, user_id])
-            .map_err(|e| ZrcDBError::Internal("while set user setting".to_string(), e))
+            .map_err(|e| DBAccessManager::map_err("while set user setting".to_string(), Some(e)))
     }
 }
 
@@ -538,20 +557,16 @@ impl DBAccessManager {
         score::score_lookup(self, user_id)
     }
 
-    pub fn get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), ZrcDBError> {
-        self._get_r10_and_b30(user_id)
-            .map_err(|e| ZrcDBError::Internal("while querying r10 and b30".to_string(), e))
+    pub fn get_r10_and_b30(&self, user_id: isize) -> ZrcDBResult<(f64, f64)> {
+        self._get_r10_and_b30(user_id).map_err(|e| {
+            DBAccessManager::map_err("while querying r10 and b30".to_string(), Some(e))
+        })
     }
 
     fn _get_r10_and_b30(&self, user_id: isize) -> Result<(f64, f64), rusqlite::Error> {
-        let mut stmt = self
-            .connection
-            .prepare(sql_stmt::COMPUTE_R10_AND_B30)?;
+        let mut stmt = self.connection.prepare(sql_stmt::COMPUTE_R10_AND_B30)?;
         stmt.query_row(params![user_id], |row| {
-            Ok((
-                row.get::<&str, f64>("r10")?,
-                row.get::<&str, f64>("b30")?
-            ))
+            Ok((row.get::<&str, f64>("r10")?, row.get::<&str, f64>("b30")?))
         })
     }
 }

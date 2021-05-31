@@ -100,6 +100,16 @@ pub const PACK_ITEM: &str = r#"
         pack_name = ?
 "#;
 
+pub const LOGIN: &str = r#"
+    select
+        user_id
+    from
+        player
+    where
+        (lower(user_name) = lower(?1) or email = ?1)
+        and pwdhash = ?2
+"#;
+
 pub const USER_INFO: &str = r#"
     select
         user_name,

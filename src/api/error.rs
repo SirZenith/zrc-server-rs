@@ -30,7 +30,7 @@ const EMAIL_DUPLICATED: i32 = 102; // 电子邮箱已注册
 #[allow(dead_code)]
 const DEVICE_ID_DUPLICATED: i32 = 103; // 已有一个账号由此设备创建
 #[allow(dead_code)]
-const PWD_DOES_NOT_MATCH: i32 = 104; // 用户名密码错误
+const WRONG_USERNAME_OR_PWD: i32 = 104; // 用户名密码错误
 #[allow(dead_code)]
 const LOGIN_ON_TOO_MUCH_DEVICES: i32 = 105; // 24 小时内登入两台设备
                                               // const ACCOUNT_FROZEN: i32 = 106; // 账户冻结
@@ -107,12 +107,14 @@ const ERROR_DURING_UPDATING_DATA: i32 = 9907; // 更新数据时发生了问题
 pub enum ZrcSVError {
     #[error("database error - {0}")]
     DBError(ZrcDBError),
+    #[error("user not found")]
+    UserNotFound,
+    #[error("invalid token")]
+    InvalidToken(String),
     #[error("JWT token creation error")]
     JWTTokenCreationError,
     #[error("failed to read authentication header field")]
     NoAuthHeader,
-    #[error("invalid authentication token")]
-    InvalidAuthToken,
     #[error("template rendering error - {0}")]
     TemplateError(askama::Error),
 }
@@ -123,48 +125,49 @@ pub async fn handle_rejection(
     err: warp::Rejection,
 ) -> std::result::Result<impl warp::Reply, Infallible> {
     let (status, message, error_code) = if err.is_not_found() {
-        (StatusCode::NOT_FOUND, "not found", UNKNOWN_ERROR)
+        (StatusCode::NOT_FOUND, "not found".to_string(), UNKNOWN_ERROR)
     } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
-        (StatusCode::METHOD_NOT_ALLOWED, "method not allowed", UNKNOWN_ERROR)
+        (StatusCode::METHOD_NOT_ALLOWED, "method not allowed".to_string(), UNKNOWN_ERROR)
     } else if let Some(e) = err.find::<ZrcSVError>() {
         match e {
             ZrcSVError::DBError(e) => handle_dberror(e),
-            ZrcSVError::JWTTokenCreationError => (StatusCode::FORBIDDEN, "authentication token creation failed", FUNCTION_NOT_AVAILABLE),
-            ZrcSVError::NoAuthHeader => (StatusCode::FORBIDDEN, "can't read authentication header", AUTH_FAILED),
-            ZrcSVError::InvalidAuthToken => (StatusCode::FORBIDDEN, "invalid authentication token", AUTH_FAILED),
+            ZrcSVError::UserNotFound => (StatusCode::FORBIDDEN, format!("user not found, check your user name/ email and password"), WRONG_USERNAME_OR_PWD),
+            ZrcSVError::InvalidToken(msg) => (StatusCode::FORBIDDEN, format!("invalid token, {}", msg), AUTH_FAILED),
+            ZrcSVError::JWTTokenCreationError => (StatusCode::FORBIDDEN, "authentication token creation failed".to_string(), FUNCTION_NOT_AVAILABLE),
+            ZrcSVError::NoAuthHeader => (StatusCode::FORBIDDEN, "can't read authentication header".to_string(), AUTH_FAILED),
             ZrcSVError::TemplateError(e) => {
                 log::error!("template rendering error, {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "template rendering error", UNKNOWN_ERROR)
+                (StatusCode::INTERNAL_SERVER_ERROR, "template rendering error".to_string(), UNKNOWN_ERROR)
             }
         }
     } else {
         log::error!("unhandled error, {:?}", err);
-        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error", UNKNOWN_ERROR)
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error".to_string(), UNKNOWN_ERROR)
     };
 
     let json = warp::reply::json(&ResponseContainer {
         success: false,
         value: (),
         error_code,
-        error_msg: message.into(),
+        error_msg: message,
     });
 
     Ok(warp::reply::with_status(json, status))
 }
 
-fn handle_dberror(err: &ZrcDBError) -> (StatusCode, &str, i32) {
+fn handle_dberror(err: &ZrcDBError) -> (StatusCode, String, i32) {
     let (status, message, error_code) = match err {
         ZrcDBError::DataNotFound(msg) => {
             log::error!("data not found, {}", msg);
-            (StatusCode::NOT_FOUND, "data needed not found", UNKNOWN_ERROR)
+            (StatusCode::NOT_FOUND, "data needed not found".to_string(), UNKNOWN_ERROR)
         }
         ZrcDBError::Internal(msg, error) => {
             log::error!("data access internal error, {}, {}", msg, error);
-            (StatusCode::INTERNAL_SERVER_ERROR, "server side error", UNKNOWN_ERROR)
+            (StatusCode::INTERNAL_SERVER_ERROR, "server side error".to_string(), UNKNOWN_ERROR)
         }
         ZrcDBError::Other(msg) => {
             log::error!("other data access error, {}", msg);
-            (StatusCode::INTERNAL_SERVER_ERROR, "unknown database error", UNKNOWN_ERROR)
+            (StatusCode::INTERNAL_SERVER_ERROR, "unknown database error".to_string(), UNKNOWN_ERROR)
         }
     };
     (status, message, error_code)

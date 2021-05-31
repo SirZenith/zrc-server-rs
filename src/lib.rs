@@ -22,38 +22,34 @@ const STATIC_USER_ID: isize = 1;
 
 #[derive(StructOpt)]
 pub struct Cli {
-    // IP address of server instance.
-    #[structopt(short, long, default_value = "127.0.0.1")]
+    #[structopt(short, long, default_value = "127.0.0.1", help = "IP address of server instance.")]
     ip: String,
 
-    // Hostname of server instance.
-    #[structopt(short, long, default_value = "localhost")]
+    #[structopt(short, long, default_value = "localhost", help = "Hostname of server instance.")]
     hostname: String,
-    // Port number used by server.
-    #[structopt(short, long, default_value = "8080")]
+
+    #[structopt(short, long, default_value = "8080", help = "Port number used by server.")]
     port: u16,
-    // Path of data base file.
-    #[structopt(short, long = "db", default_value = "./ZrcDB.db")]
+
+    #[structopt(short, long = "db", default_value = "./ZrcDB.db", help = "Path of data base file.")]
     db_path: String,
 
-    // Root directory of static files.
-    #[structopt(short = "r", long = "root", default_value = "./")]
+    #[structopt(short = "r", long = "root", default_value = "./", help = "Root directory of static files.")]
     document_root: String,
-    // Prefix for all API, final access URL will be http://<hostname>/<prefix-all>/<your-api>
-    #[structopt(long = "prefix-all", default_value = "")]
+    // final access URL will be http://<hostname>/<prefix-all>/<your-api>
+    #[structopt(long = "prefix-all", default_value = "", help = "Prefix for all API.")]
     prefix_all: String,
 
-    // Path prefix for static files, final access URL will be http://<hostname>/<prefix-all>/<prefix-static>/<your-filename>
-    #[structopt(long = "prefix-static", default_value = "static")]
+    // final access URL will be http://<hostname>/<prefix-all>/<prefix-static>/<your-filename>
+    #[structopt(long = "prefix-static", default_value = "static", help = "Path prefix for static files.")]
     prefix_static_file: String,
 
-    // Name of songs directory under document root
-    #[structopt(long = "songs-dirname", default_value = "songs")]
+    
+    #[structopt(long = "songs-dirname", default_value = "songs", help = "Name of songs directory under document root.")]
     songs_dirname: String,
 
-    // Whether to turn off authentication
-    #[structopt(long = "no-auth")]
-    no_auth: bool,
+    #[structopt(long = "no-auth", help = "Whether to turn off authentication")]
+    is_auth_off: bool,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -63,7 +59,7 @@ fn is_zero<T: Into<f64> + Copy>(num: &T) -> bool {
 
 pub async fn start_serving(argv: Vec<String>) {
     SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
+        .with_level(log::LevelFilter::Debug)
         .init()
         .unwrap();
 
@@ -99,7 +95,7 @@ pub async fn start_serving(argv: Vec<String>) {
         cli.prefix_all,
         cli.prefix_static_file,
         cli.songs_dirname,
-        cli.no_auth,
+        cli.is_auth_off,
     );
 
     let socket_addr = match format!("{}:{}", cli.ip, cli.port).parse::<SocketAddr>() {

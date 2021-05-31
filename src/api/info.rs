@@ -1,4 +1,5 @@
 use super::*;
+use super::auth;
 
 #[derive(Serialize)]
 pub struct LoginToken {
@@ -21,11 +22,10 @@ pub struct AggregateCall {
 }
 
 // GET /auth/login
-pub async fn login(_: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
-    // TODO: add authentication
+pub async fn login(jwt: String) -> ZrcSVResult<impl warp::Reply> {
     let result = LoginToken {
-        access_token: "nothing".to_string(),
-        token_type: "Bear".to_string(),
+        access_token: jwt,
+        token_type: auth::BEARER.trim().to_string(),
         success: true,
         error_code: 0,
     };
@@ -112,6 +112,7 @@ pub async fn user_setting(
         None => return Err(warp::reject::not_found()),
     };
     if option == "favorite_character" {
+        // TODO: remove this unwrap
         let char_id = value.parse::<isize>().unwrap();
         if let Err(e) = conn.set_favorite_character(user_id, char_id) {
             return Err(warp::reject::custom(ZrcSVError::DBError(e)));
