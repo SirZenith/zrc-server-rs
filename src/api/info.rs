@@ -52,7 +52,7 @@ pub async fn aggregate(call: AggregateCall, user_id: isize, conn: DBAccessManage
             "/world/map/me" => {
                 serde_json::to_string(&conn.get_map_info(user_id).unwrap()).unwrap()
             }
-            _ => serde_json::to_string("[]").unwrap(),
+            _ => serde_json::to_string(&Vec::<()>::new()).unwrap(),
         };
         results.push(format!(r#"{{"id":{},"value":{}}}"#, call.id, content));
     }
@@ -80,7 +80,7 @@ pub async fn pack_info(conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
 
 // GET /present/me
 pub async fn present_me(_: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
-    respond_ok("[]")
+    respond_ok(Vec::<()>::new())
 }
 
 // GET /user/me
