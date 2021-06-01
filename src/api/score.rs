@@ -7,9 +7,11 @@ use askama::Template;
 pub async fn score_token(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     let token = conn.gen_score_token(user_id)
         .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
+    let mut result = HashMap::new();
+    result.insert("token".to_string(), token);
     respond_ok(ResponseContainer {
         success: true,
-        value: token,
+        value: result,
         error_code: 0,
         error_msg: String::new(),
     })
