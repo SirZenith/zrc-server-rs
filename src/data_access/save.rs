@@ -178,7 +178,7 @@ impl BackupData {
         &mut self,
         conn: &mut DBAccessManager,
         user_id: isize,
-    ) -> Result<(), rusqlite::Error> {
+    ) -> ZrcDBResult<()> {
         let mut recieved_record: HashMap<String, ScoreRecord> = HashMap::new();
         let mut time_played: HashMap<String, i64> = HashMap::new();
         if let Some(scores) = self.scores.get("") {
@@ -209,7 +209,9 @@ impl BackupData {
                 }
             }
         }
-        let best_with_iden = conn.get_best_scores_with_iden(user_id)?;
+        let best_with_iden = conn.get_best_scores_with_iden(user_id).map_err(|e| {
+            DBAccessManager::map_err("while getting best scores with identifier", Some(e))
+        })?;
         let mut score_updated = false;
         for (iden, record) in &recieved_record {
             if let Some(score) = best_with_iden.get(iden) {

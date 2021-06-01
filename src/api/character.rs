@@ -13,12 +13,16 @@ pub async fn change_character(
     conn: DBAccessManager,
 ) -> ZrcSVResult<impl warp::Reply> {
     conn.change_character(user_id, change_to.character, change_to.skill_sealed)
-        .unwrap();
-    let result = format!(
-        r#"{{"success": true,"value": {{"user_id": {}, "character": {}}}}}"#,
-        user_id, change_to.character
-    );
-    Ok(warp::reply::with_status(result, warp::http::StatusCode::OK))
+        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
+    let mut result = HashMap::new();
+    result.insert("user_id".to_string(), user_id);
+    result.insert("character".to_string(), change_to.character);
+    respond_ok(ResponseContainer {
+        success: true,
+        value: result,
+        error_code: 0,
+        error_msg: String::new(),
+    })
 }
 
 #[derive(Serialize)]

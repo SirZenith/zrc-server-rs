@@ -51,7 +51,7 @@ pub fn api_filter(
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let welcome = warp::path("welcome").map(|| "Welcome to Zrcaea Server");
     let file_server = warp::path(prefix_static_file.clone())
-        .and(with_auth(is_auth_off))
+        .and(with_auth(true))
         .and(warp::fs::dir(document_root))
         .map(|_, it| it);
     let signup_route = signup(pool.clone());
@@ -102,13 +102,13 @@ fn signup(pool: SqlitePool) -> impl Filter<Extract = (impl warp::Reply,), Error 
         .and_then(info::signup)
 }
 
-// GET /auth/login
+// POST /auth/login
 fn login(
     is_auth_off: bool,
     pool: SqlitePool,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("auth" / "login")
-        .and(warp::get())
+        .and(warp::post())
         .and(with_basic_auth(is_auth_off, pool))
         .and_then(info::login)
 }

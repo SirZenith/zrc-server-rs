@@ -182,7 +182,10 @@ pub const MINIMUM_USER_INFO: &str = r#"
     select
         user_name,
         user_code,
-        ifnull(favorite_partner, 0) as "fav_partner",
+        (case when ifnull(favorite_partner, 0) = -1
+        then 0
+        else ifnull(favorite_partner, 0)
+        end) as "fav_partner",
         ifnull(is_uncapped, '') as "uncapped",
         ifnull(is_uncapped_override, '') as "uncapped_override",
         rating,

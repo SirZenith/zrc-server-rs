@@ -169,8 +169,7 @@ impl UserInfoForScoreLookup {
     pub fn new(conn: &DBAccessManager, user_id: isize) -> Result<Self, rusqlite::Error> {
         let mut stmt = conn
             .connection
-            .prepare(sql_stmt::MINIMUM_USER_INFO)
-            ?;
+            .prepare(sql_stmt::MINIMUM_USER_INFO)?;
         let user_info = stmt
             .query_row(params![user_id], |row| {
                 Ok(UserInfoForScoreLookup {

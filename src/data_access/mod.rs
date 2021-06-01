@@ -185,41 +185,37 @@ mod character {
                 Some(id) => format!("{}{}", sql_stmt::COND_SINGLE_CHAR_STATS, id),
                 None => sql_stmt::COND_ALL_CHAR_STATS.to_string(),
             };
-            let mut stmt = conn
-                .connection
-                .prepare(&format!("{}{};", sql_stmt::CHAR_STATS, cond))
-                .unwrap();
+            let mut stmt =
+                conn.connection
+                    .prepare(&format!("{}{};", sql_stmt::CHAR_STATS, cond))?;
 
             // TODO: Possible error point
-            let statses = stmt
-                .query_map(params![user_id], |row| {
-                    Ok(CharacterStats {
-                        voice: if row.get::<&str, isize>("have_voice").unwrap() >= 0 {
-                            VOICE.iter().map(|x| *x).collect()
-                        } else {
-                            Vec::new()
-                        },
-                        is_uncapped_override: row.get::<&str, String>("uncapped_override")? == "t",
-                        is_uncapped: row.get::<&str, String>("uncapped")? == "t",
-                        uncap_cores: Vec::new(),
-                        char_type: row.get("char_type")?,
-                        skill_id_uncap: row.get("uncap_skill")?,
-                        skill_requires_uncap: row.get::<&str, String>("skill_requires_uncap")?
-                            == "t",
-                        skill_unlock_level: row.get("skill_unlock_level")?,
-                        skill_id: row.get("skill_id")?,
-                        overdrive: row.get("overdrive")?,
-                        prog: row.get("prog")?,
-                        frag: row.get("frag")?,
-                        level_exp: row.get("level_exp")?,
-                        exp: row.get("exp_val")?,
-                        level: row.get("lv")?,
-                        name: row.get("part_name")?,
-                        character_id: row.get("part_id")?,
-                        prog_tempest: row.get("prog_tempest")?,
-                    })
+            let statses = stmt.query_map(params![user_id], |row| {
+                Ok(CharacterStats {
+                    voice: if row.get::<&str, isize>("have_voice")? >= 0 {
+                        VOICE.iter().map(|x| *x).collect()
+                    } else {
+                        Vec::new()
+                    },
+                    is_uncapped_override: row.get::<&str, String>("uncapped_override")? == "t",
+                    is_uncapped: row.get::<&str, String>("uncapped")? == "t",
+                    uncap_cores: Vec::new(),
+                    char_type: row.get("char_type")?,
+                    skill_id_uncap: row.get("uncap_skill")?,
+                    skill_requires_uncap: row.get::<&str, String>("skill_requires_uncap")? == "t",
+                    skill_unlock_level: row.get("skill_unlock_level")?,
+                    skill_id: row.get("skill_id")?,
+                    overdrive: row.get("overdrive")?,
+                    prog: row.get("prog")?,
+                    frag: row.get("frag")?,
+                    level_exp: row.get("level_exp")?,
+                    exp: row.get("exp_val")?,
+                    level: row.get("lv")?,
+                    name: row.get("part_name")?,
+                    character_id: row.get("part_id")?,
+                    prog_tempest: row.get("prog_tempest")?,
                 })
-                .unwrap();
+            })?;
             Ok(CharacterStatses(
                 statses.into_iter().map(|s| s.unwrap()).collect(),
             ))
@@ -278,7 +274,6 @@ pub fn with_db_access_manager(
 pub struct DBAccessManager {
     connection: PooledSqlite,
 }
-
 
 impl DBAccessManager {
     pub fn new(connection: PooledSqlite) -> DBAccessManager {
@@ -479,14 +474,14 @@ impl DBAccessManager {
                 )
             })?;
         }
-        tx.commit().map_err(|e| DBAccessManager::map_err("while commit purchase", Some(e)))?;
-        match UserInfoForItemPurchase::new(self, user_id) {
-            Ok(info) => Ok(info),
-            Err(e) => Err(DBAccessManager::map_err(
+        tx.commit()
+            .map_err(|e| DBAccessManager::map_err("while commit purchase", Some(e)))?;
+        UserInfoForItemPurchase::new(self, user_id).map_err(|e| {
+            DBAccessManager::map_err(
                 "while generate user info after pack purchasing",
                 Some(e),
-            )),
-        }
+            )
+        })
     }
 }
 
@@ -498,26 +493,39 @@ impl DBAccessManager {
         user_id: isize,
         char_id: isize,
         skill_sealed: bool,
-    ) -> Result<usize, rusqlite::Error> {
+    ) -> ZrcDBResult<usize> {
         let skill_sealed = if skill_sealed { "t" } else { "f" };
-        self.connection.execute(
-            sql_stmt::CHANGE_CHARACTER,
-            params![char_id, skill_sealed, user_id],
-        )
+        self.connection
+            .execute(
+                sql_stmt::CHANGE_CHARACTER,
+                params![char_id, skill_sealed, user_id],
+            )
+            .map_err(|e| DBAccessManager::map_err("while changing character", Some(e)))
     }
 
-    pub fn toggle_uncap(
-        &self,
-        user_id: isize,
-        part_id: isize,
-    ) -> Result<CharacterStatses, rusqlite::Error> {
-        let mut stmt = self.connection.prepare(sql_stmt::TOGGLE_UNCAP).unwrap();
-        stmt.execute(params![user_id, part_id]).unwrap();
-        let stats = self.get_char_statses(user_id, Some(part_id));
-        stats
+    pub fn toggle_uncap(&self, user_id: isize, part_id: isize) -> ZrcDBResult<CharacterStatses> {
+        let mut stmt = self
+            .connection
+            .prepare(sql_stmt::TOGGLE_UNCAP)
+            .map_err(|e| {
+                DBAccessManager::map_err("while preparing statement for toogle uncap", Some(e))
+            })?;
+        stmt.execute(params![user_id, part_id]).map_err(|e| {
+            DBAccessManager::map_err(
+                &format!("while toogle uncap for user id '{}'", user_id),
+                Some(e),
+            )
+        })?;
+        let stats = self.get_char_statses(user_id, Some(part_id)).map_err(|e| {
+            DBAccessManager::map_err(
+                "while querying character statistics after toogling uncap",
+                Some(e),
+            )
+        })?;
+        Ok(stats)
     }
 
-    pub fn get_char_statses(
+    fn get_char_statses(
         &self,
         user_id: isize,
         part_id: Option<isize>,
@@ -634,7 +642,12 @@ impl DBAccessManager {
 
     pub fn get_minimum_user_info(&self, user_id: isize) -> ZrcDBResult<UserInfoForScoreLookup> {
         UserInfoForScoreLookup::new(&self, user_id)
-            .map_err(|e| DBAccessManager::map_err("while querying minimum user info", Some(e)))
+            .map_err(|e| {
+                DBAccessManager::map_err(
+                &format!("while querying minimum user info for user '{}'", user_id), 
+                Some(e)
+                )
+            })
     }
 
     pub fn get_game_info(&self) -> ZrcDBResult<GameInfo> {
@@ -687,7 +700,12 @@ impl DBAccessManager {
     pub fn set_favorite_character(&self, user_id: isize, char_id: isize) -> ZrcDBResult<usize> {
         self.connection
             .execute(sql_stmt::SET_FAVORITE_CHARACTER, params![char_id, user_id])
-            .map_err(|e| DBAccessManager::map_err("while querying map info", Some(e)))
+            .map_err(|e| {
+                DBAccessManager::map_err(
+                    &format!("while querying map info for user '{}'", user_id),
+                    Some(e))
+
+            })
     }
 
     pub fn set_user_setting(
@@ -721,8 +739,8 @@ impl DBAccessManager {
 /// Score upload and lookup service.
 impl DBAccessManager {
     /// Generate token for score upload around the corner.
-    pub fn gen_score_token(&self) -> String {
-        "nothing".to_string()
+    pub fn gen_score_token(&self, _user_id: isize) -> ZrcDBResult<String> {
+        Ok("nothing".to_string())
     }
 
     /// Insert a score record into database.
@@ -731,8 +749,9 @@ impl DBAccessManager {
         score: &ScoreRecord,
         user_id: isize,
         time: Option<&i64>,
-    ) -> Result<HashMap<String, isize>, rusqlite::Error> {
+    ) -> ZrcDBResult<HashMap<String, isize>> {
         score::score_upload(self, score, user_id, time)
+            .map_err(|e| DBAccessManager::map_err("while uploading score", Some(e)))
     }
 
     pub fn get_best_scores_with_iden(
@@ -749,8 +768,10 @@ impl DBAccessManager {
         score::get_all_best_scores(self, user_id)
     }
 
-    pub fn score_lookup(&self, user_id: isize) -> Result<Vec<LookupedScore>, rusqlite::Error> {
-        score::score_lookup(self, user_id)
+    pub fn score_lookup(&self, user_id: isize) -> ZrcDBResult<Vec<LookupedScore>> {
+        score::score_lookup(self, user_id).map_err(|e| {
+            DBAccessManager::map_err("while processing score lookup", Some(e))
+        })
     }
 
     pub fn get_r10_and_b30(&self, user_id: isize) -> ZrcDBResult<(f64, f64)> {

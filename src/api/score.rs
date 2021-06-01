@@ -4,14 +4,15 @@ use crate::data_access::LookupedScore;
 use askama::Template;
 
 // GET /score/token
-pub async fn score_token(_user_id: isize, pool: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
-    Ok(warp::reply::with_status(
-        format!(
-            r#"{{"success": true, "value": {{"token": "{}"}}}}"#,
-            pool.gen_score_token()
-        ),
-        warp::http::StatusCode::OK,
-    ))
+pub async fn score_token(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
+    let token = conn.gen_score_token(user_id)
+        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
+    respond_ok(ResponseContainer {
+        success: true,
+        value: token,
+        error_code: 0,
+        error_msg: String::new(),
+    })
 }
 
 // POST /score/song
@@ -47,15 +48,13 @@ struct RecordsTemplate {
 // GET /score/:user_id
 pub async fn score_lookup(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     match conn.score_lookup(user_id) {
-        Err(_) => Ok(warp::reply::html("".to_string())),
+        Err(e) => Err(warp::reject::custom(ZrcSVError::DBError(e))),
         Ok(records) => {
             let (r10, b30) = conn
                 .get_r10_and_b30(user_id)
                 .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
-            let user_info = match conn.get_minimum_user_info(user_id) {
-                Ok(info) => info,
-                Err(err) => return Err(warp::reject::custom(err)),
-            };
+            let user_info = conn.get_minimum_user_info(user_id)
+                .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
             let rating_level = user_info.get_rating_level();
             let template = RecordsTemplate {
                 user_name: user_info.name,

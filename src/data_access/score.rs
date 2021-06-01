@@ -464,13 +464,11 @@ pub fn get_best_scores_with_iden(
     let mut scores = HashMap::new();
     let mut stmt = conn
         .connection
-        .prepare(sql_stmt::QUERY_BEST_SCORE_WITH_IDEN)
-        .unwrap();
+        .prepare(sql_stmt::QUERY_BEST_SCORE_WITH_IDEN)?;
     let results = stmt
         .query_map(params![user_id], |row| {
             Ok((row.get("iden")?, row.get("score")?))
-        })
-        .unwrap();
+        })?;
 
     for score in results {
         let score = score.unwrap();
@@ -485,8 +483,7 @@ pub fn get_all_best_scores(
 ) -> Result<Vec<(ScoreRecord, i64)>, rusqlite::Error> {
     let mut stmt = conn
         .connection
-        .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_BACKUP)
-        .unwrap();
+        .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_BACKUP)?;
     let results = stmt
         .query_map(params![user_id], |row| {
             let mut record = ScoreRecord::new();
@@ -501,8 +498,7 @@ pub fn get_all_best_scores(
             record.modifier = row.get("modifier")?;
             record.clear_type = row.get("clear_type")?;
             Ok((record, row.get("played_date")?))
-        })
-        .unwrap();
+        })?;
     Ok(results.into_iter().map(|x| x.unwrap()).collect())
 }
 
@@ -512,8 +508,7 @@ pub fn score_lookup(
 ) -> Result<Vec<LookupedScore>, rusqlite::Error> {
     let mut stmt = conn
         .connection
-        .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_LOOKUP)
-        .unwrap();
+        .prepare(sql_stmt::QUERY_BEST_SCORE_FOR_LOOKUP)?;
     let results = stmt
         .query_map(params![user_id], |row| {
             let record = LookupedScore {
@@ -530,7 +525,6 @@ pub fn score_lookup(
                 base_rating: row.get("base_rating")?,
             };
             Ok(record)
-        })
-        .unwrap();
+        })?;
     Ok(results.into_iter().map(|x| x.unwrap()).collect())
 }
