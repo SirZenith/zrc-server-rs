@@ -9,6 +9,10 @@ mod dlc {
     use super::*;
     use std::fmt;
 
+    pub enum ItemType {
+        Pack,
+        Single,
+    }
     /// A download request pass to `DBAccessManager` to look up info like cheksum
     /// and download URL for a downloadable song or downloadable chart of a song.
     pub struct DLRequest {
@@ -229,9 +233,12 @@ mod character {
 
 use super::*;
 pub use character::CharacterStatses;
-pub use dlc::DLRequest;
 use dlc::{DLItem, DlcInfo, DlcInfoList, InfoItem};
-use info::{GameInfo, MapInfoList, PackInfo, UserInfo, UserInfoForScoreLookup};
+pub use dlc::{DLRequest, ItemType};
+use info::{
+    GameInfo, MapInfoList, PackInfo, PackItem, UserInfo, UserInfoForItemPurchase,
+    UserInfoForScoreLookup,
+};
 pub use score::{LookupedScore, ScoreRecord};
 
 pub type SqlitePool = Arc<Pool<SqliteConnectionManager>>;
@@ -255,9 +262,23 @@ impl warp::reject::Reject for ZrcDBError {}
 
 type ZrcDBResult<T> = Result<T, ZrcDBError>;
 
+pub fn with_db_access_manager(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (DBAccessManager,), Error = warp::Rejection> + Clone {
+    warp::any()
+        .map(move || pool.clone())
+        .and_then(|pool: SqlitePool| async move {
+            match pool.get() {
+                Ok(conn) => Ok(DBAccessManager::new(conn)),
+                Err(_) => Err(warp::reject()),
+            }
+        })
+}
+
 pub struct DBAccessManager {
     connection: PooledSqlite,
 }
+
 
 impl DBAccessManager {
     pub fn new(connection: PooledSqlite) -> DBAccessManager {
@@ -277,7 +298,7 @@ impl DBAccessManager {
 }
 
 // ----------------------------------------------------------------------------
-/// DLC service, provide item checksums and download URL when required.
+/// DLC service
 impl DBAccessManager {
     /// Conditionally lookup data for downloadable songs. Conditions is passed
     /// by a `DLRequest` object.
@@ -431,6 +452,42 @@ impl DBAccessManager {
         })?;
         Ok(items.map(|i| i.unwrap()).collect())
     }
+
+    pub fn purchase_item(
+        &mut self,
+        user_id: isize,
+        item_id: &str,
+        item_type: ItemType,
+    ) -> ZrcDBResult<UserInfoForItemPurchase> {
+        let tx = self.connection.transaction().map_err(|e| {
+            DBAccessManager::map_err("while opening transacation for pack purchasing", Some(e))
+        })?;
+        {
+            let stmt = match item_type {
+                ItemType::Pack => sql_stmt::PURCHASE_PACK,
+                ItemType::Single => sql_stmt::PURCHASE_SINGLE,
+            };
+            // TODO: check user possession, prevent repeatedly purchase
+            // TODO: modify user ticket
+            let mut stmt = tx.prepare(stmt).map_err(|e| {
+                DBAccessManager::map_err("while preparing statement for pack purchasing", Some(e))
+            })?;
+            stmt.execute(params![user_id, item_id]).map_err(|e| {
+                DBAccessManager::map_err(
+                    &format!("while purchasing '{}' for user id '{}'", item_id, user_id),
+                    Some(e),
+                )
+            })?;
+        }
+        tx.commit().map_err(|e| DBAccessManager::map_err("while commit purchase", Some(e)))?;
+        match UserInfoForItemPurchase::new(self, user_id) {
+            Ok(info) => Ok(info),
+            Err(e) => Err(DBAccessManager::map_err(
+                "while generate user info after pack purchasing",
+                Some(e),
+            )),
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -472,26 +529,38 @@ impl DBAccessManager {
 // ----------------------------------------------------------------------------
 /// Getting and setting basic info for user log in.
 impl DBAccessManager {
-    fn is_user_exists(tx: &rusqlite::Transaction, user_name: &str, email: &str) -> Result<(), ZrcDBError> {
-        match tx.query_row(
-            sql_stmt::CHECK_USER_NAME_EXISTS, [user_name],
-            |row| Ok(row.get::<usize, usize>(0)?)
-        ) {
+    fn is_user_exists(
+        tx: &rusqlite::Transaction,
+        user_name: &str,
+        email: &str,
+    ) -> Result<(), ZrcDBError> {
+        match tx.query_row(sql_stmt::CHECK_USER_NAME_EXISTS, [user_name], |row| {
+            Ok(row.get::<usize, usize>(0)?)
+        }) {
             Ok(_) => return Err(ZrcDBError::UserNameExists),
             Err(e) => match e {
-                rusqlite::Error::QueryReturnedNoRows => {},
-                _ => return Err(ZrcDBError::Internal("while check existance of user name".to_string(), e))
-            }
+                rusqlite::Error::QueryReturnedNoRows => {}
+                _ => {
+                    return Err(ZrcDBError::Internal(
+                        "while check existance of user name".to_string(),
+                        e,
+                    ))
+                }
+            },
         }
-        match tx.query_row(
-            sql_stmt::CHECK_EMAIL_EXISTS, [email],
-            |row| Ok(row.get::<usize, usize>(0)?)
-        ) {
+        match tx.query_row(sql_stmt::CHECK_EMAIL_EXISTS, [email], |row| {
+            Ok(row.get::<usize, usize>(0)?)
+        }) {
             Ok(_) => return Err(ZrcDBError::EmailExists),
             Err(e) => match e {
-                rusqlite::Error::QueryReturnedNoRows => {},
-                _ => return Err(ZrcDBError::Internal("while check existance of email".to_string(), e))
-            }
+                rusqlite::Error::QueryReturnedNoRows => {}
+                _ => {
+                    return Err(ZrcDBError::Internal(
+                        "while check existance of email".to_string(),
+                        e,
+                    ))
+                }
+            },
         }
         Ok(())
     }
@@ -571,6 +640,38 @@ impl DBAccessManager {
     pub fn get_game_info(&self) -> ZrcDBResult<GameInfo> {
         GameInfo::new(&self)
             .map_err(|e| DBAccessManager::map_err("while querying game info", Some(e)))
+    }
+
+    pub fn get_single_info(&self) -> ZrcDBResult<Vec<PackInfo>> {
+        let mut stmt = self
+            .connection
+            .prepare(sql_stmt::GET_SINGLE_LIST)
+            .map_err(|e| {
+                DBAccessManager::map_err(
+                    "while opening trasacation for getting single purchase list",
+                    Some(e),
+                )
+            })?;
+        let infoes = stmt
+            .query_map([], |row| {
+                let song_id: String = row.get("song_id")?;
+                Ok(PackInfo {
+                    name: song_id.clone(),
+                    items: vec![PackItem {
+                        id: song_id,
+                        item_type: "single".to_string(),
+                        is_available: true,
+                    }],
+                    orig_price: 0,
+                    price: 0,
+                    discount_from: 1491868801000,
+                    discount_to: 1491868801000,
+                })
+            })
+            .map_err(|e| {
+                DBAccessManager::map_err("while querying single purchase list", Some(e))
+            })?;
+        Ok(infoes.map(|i| i.unwrap()).collect())
     }
 
     pub fn get_pack_info(&self) -> ZrcDBResult<Vec<PackInfo>> {
@@ -663,19 +764,4 @@ impl DBAccessManager {
             Ok((row.get::<&str, f64>("r10")?, row.get::<&str, f64>("b30")?))
         })
     }
-}
-
-// ----------------------------------------------------------------------------
-
-pub fn with_db_access_manager(
-    pool: SqlitePool,
-) -> impl Filter<Extract = (DBAccessManager,), Error = warp::Rejection> + Clone {
-    warp::any()
-        .map(move || pool.clone())
-        .and_then(|pool: SqlitePool| async move {
-            match pool.get() {
-                Ok(conn) => Ok(DBAccessManager::new(conn)),
-                Err(_) => Err(warp::reject()),
-            }
-        })
 }

@@ -45,7 +45,7 @@ pub const CHANGE_CHARACTER: &str = r#"
     update player set partner = ?1, is_skill_sealed = ?2 where user_id = ?3
 "#;
 
-// download
+// dlc
 // ============================================================================
 pub const QUERY_DL: &str = r#"
     select
@@ -63,6 +63,18 @@ pub const QUERY_DL: &str = r#"
         and {query_condition}
         and (song.remote_dl = 't' or chart_info.remote_dl = 't')
         {song_id_condition}
+"#;
+
+pub const PURCHASE_PACK: &str = r#"
+    replace into pack_purchase_info(user_id, pack_name) values(?1, ?2)
+"#;
+
+pub const PURCHASE_SINGLE: &str = r#"
+    replace into single_purchase_info(user_id, song_id) values(?1, ?2)
+"#;
+
+pub const GET_SINGLE_LIST: &str = r#"
+    select song_id from single
 "#;
 
 // info
@@ -133,6 +145,10 @@ pub const LOGIN: &str = r#"
     where
         (lower(user_name) = lower(?1) or email = ?1)
         and pwdhash = ?2
+"#;
+
+pub const GET_USER_TICKET: &str = r#"
+    select ticket from player where user_id = ?1
 "#;
 
 pub const USER_INFO: &str = r#"

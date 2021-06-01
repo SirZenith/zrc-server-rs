@@ -211,6 +211,33 @@ impl UserInfoForScoreLookup {
     }
 }
 
+#[derive(Serialize)]
+pub struct UserInfoForItemPurchase {
+    user_id: isize,
+    ticket: usize,
+    packs: Vec<String>,
+    singles: Vec<String>,
+    characters: Vec<i8>,
+}
+
+impl UserInfoForItemPurchase {
+    pub fn new(conn: &DBAccessManager, user_id: isize) -> Result<Self, rusqlite::Error> {
+        let mut stmt = conn.connection.prepare(sql_stmt::GET_USER_TICKET)?;
+        let ticket = stmt.query_row(params![user_id], |row| Ok(row.get("ticket")?))?;
+        let packs = get_item_list(conn, "pack_name", "pack_purchase_info", user_id)?;
+        let singles = get_item_list(conn, "song_id", "single_purchase_info", user_id)?;
+        let character_stats = super::character::CharacterStatses::new(conn, user_id, None)?;
+        let characters = character_stats.list_char_ids();
+        Ok(UserInfoForItemPurchase {
+            user_id,
+            ticket,
+            packs,
+            singles,
+            characters,
+        })
+    }
+}
+
 fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isize) -> Result<Vec<String>, rusqlite::Error> {
     let mut stmt = conn
         .connection
@@ -232,21 +259,21 @@ fn get_item_list(conn: &DBAccessManager, column: &str, table: &str, user_id: isi
 
 // ----------------------------------------------------------------------------
 #[derive(Serialize)]
-struct PackItem {
-    id: String,
+pub struct PackItem {
+    pub id: String,
     #[serde(rename = "type")]
-    item_type: String,
-    is_available: bool,
+    pub item_type: String,
+    pub is_available: bool,
 }
 
 #[derive(Serialize)]
 pub struct PackInfo {
-    name: String,
-    items: Vec<PackItem>,
-    price: isize,
-    orig_price: isize,
-    discount_from: i64,
-    discount_to: i64,
+    pub name: String,
+    pub items: Vec<PackItem>,
+    pub price: isize,
+    pub orig_price: isize,
+    pub discount_from: i64,
+    pub discount_to: i64,
 }
 
 impl PackInfo {

@@ -5,7 +5,7 @@ use super::*;
 
 mod auth;
 mod character;
-mod download;
+mod dlc;
 pub mod error;
 mod info;
 mod save;
@@ -58,6 +58,7 @@ pub fn api_filter(
     let login_auth = login(is_auth_off, pool.clone());
     let get_info = game_info(pool.clone())
         .or(pack_info(pool.clone()))
+        .or(single_info(pool.clone()))
         .or(present_me(pool.clone()))
         .or(score_lookup(pool.clone()));
     let game_play = aggregate(is_auth_off, pool.clone())
@@ -71,6 +72,7 @@ pub fn api_filter(
             prefix_static_file.clone(),
             songs_dirname.clone(),
         ))
+        .or(purchase_item(is_auth_off, pool.clone()))
         .or(change_character(is_auth_off, pool.clone()))
         .or(toggle_uncap(is_auth_off, pool.clone()))
         .or(score_token(is_auth_off, pool.clone()))
@@ -94,6 +96,7 @@ pub fn api_filter(
 // GET /user/
 fn signup(pool: SqlitePool) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("user")
+        .and(warp::get())
         .and(warp::body::form())
         .and(with_db_access_manager(pool))
         .and_then(info::signup)
@@ -105,6 +108,7 @@ fn login(
     pool: SqlitePool,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("auth" / "login")
+        .and(warp::get())
         .and(with_basic_auth(is_auth_off, pool))
         .and_then(info::login)
 }
@@ -140,6 +144,16 @@ fn pack_info(
         .and(warp::get())
         .and(with_db_access_manager(pool))
         .and_then(info::pack_info)
+}
+
+// GET /purchase/bundle/single
+fn single_info(
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("purchase" / "bundle" / "single")
+        .and(warp::get())
+        .and(with_db_access_manager(pool))
+        .and_then(info::single_info)
 }
 
 // GET /present/me
@@ -209,7 +223,20 @@ fn get_download_list(
         .and(warp::query::<DLRequest>())
         .and(with_auth(is_auth_off))
         .and(with_db_access_manager(pool))
-        .and_then(download::get_download_list)
+        .and_then(dlc::get_download_list)
+}
+
+// POST /purchase/me/pack
+fn purchase_item(
+    is_auth_off: bool,
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("purchase" / "me" / "pack")
+        .and(warp::post())
+        .and(warp::body::form())
+        .and(with_auth(is_auth_off))
+        .and(with_db_access_manager(pool))
+        .and_then(dlc::purcahse_item)
 }
 
 // POST /user/me/characters

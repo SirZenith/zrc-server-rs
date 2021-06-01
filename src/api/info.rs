@@ -140,6 +140,19 @@ pub async fn pack_info(conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     }
 }
 
+// GET /purchase/bundle/single
+pub async fn single_info(conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
+    match conn.get_single_info() {
+        Ok(result) => respond_ok(ResponseContainer {
+            success: true,
+            value: result,
+            error_code: 0,
+            error_msg: String::new(),
+        }),
+        Err(e) => Err(warp::reject::custom(ZrcSVError::DBError(e)))
+    }
+}
+
 // GET /present/me
 pub async fn present_me(_: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
     respond_ok(Vec::<()>::new())
