@@ -17,7 +17,7 @@ struct CoreInfo {
 }
 
 #[derive(Serialize)]
-struct MostRecentScore {
+pub struct MostRecentScore {
     song_id: String,
     difficulty: i8,
     score: isize,
@@ -36,12 +36,42 @@ struct MostRecentScore {
     best_clear_type: i8,
 }
 
+fn get_most_recent_score(conn: &DBAccessManager, user_id: isize) -> Result<Option<MostRecentScore>, rusqlite::Error> {
+    let mut stmt = conn
+        .connection
+        .prepare(sql_stmt::USER_MOST_RECENT_SCORE)?;
+    let score = match stmt
+        .query_row(params![user_id], |row| {
+            Ok(MostRecentScore {
+                song_id: row.get("song_id")?,
+                difficulty: row.get("difficulty")?,
+                score: row.get("score")?,
+                shiny: row.get("shiny_pure")?,
+                pure: row.get("pure")?,
+                far: row.get("far")?,
+                lost: row.get("lost")?,
+                health: row.get("health")?,
+                modifier: row.get("modifier")?,
+                time_played: row.get::<&str, i64>("played_date")? * 1000,
+                clear_type: row.get("clear_type")?,
+                best_clear_type: row.get("best_clear_type")?,
+            })
+        }) {
+            Ok(s) => s,
+            Err(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => return Ok(None),
+                _ => return Err(e)
+            }
+        };
+    Ok(Some(score))
+}
+
 #[derive(Serialize)]
 pub struct UserInfo {
     is_aprilfools: bool,
     curr_available_maps: Vec<String>,
     character_stats: crate::data_access::CharacterStatses,
-    friends: Vec<String>,
+    pub friends: Vec<UserInfoMinimum>,
     settings: Setting,
     user_id: isize,
     name: String,
@@ -118,76 +148,61 @@ impl UserInfo {
                 })
             })
             ?;
-        user_info.get_most_recent_score(conn)?;
+        match get_most_recent_score(conn, user_id)? {
+            None => {},
+            Some(score) => user_info.recent_score.push(score),
+        };
+        
         Ok(user_info)
-    }
-
-    fn get_most_recent_score(&mut self, conn: &DBAccessManager) -> Result<(), rusqlite::Error> {
-        let mut stmt = conn
-            .connection
-            .prepare(sql_stmt::USER_MOST_RECENT_SCORE)?;
-        let score = match stmt
-            .query_row(&[&self.user_id], |row| {
-                Ok(MostRecentScore {
-                    song_id: row.get("song_id")?,
-                    difficulty: row.get("difficulty")?,
-                    score: row.get("score")?,
-                    shiny: row.get("shiny_pure")?,
-                    pure: row.get("pure")?,
-                    far: row.get("far")?,
-                    lost: row.get("lost")?,
-                    health: row.get("health")?,
-                    modifier: row.get("modifier")?,
-                    time_played: row.get("played_date")?,
-                    clear_type: row.get("clear_type")?,
-                    best_clear_type: row.get("best_clear_type")?,
-                })
-            }) {
-                Ok(s) => s,
-                Err(e) => match e {
-                    rusqlite::Error::QueryReturnedNoRows => return Ok(()),
-                    _ => return Err(e)
-                }
-            };
-        self.recent_score.push(score);
-        Ok(())
     }
 }
 
 #[derive(Serialize)]
-pub struct UserInfoForScoreLookup {
+pub struct UserInfoMinimum {
     pub name: String,
-    pub user_code: String,
+    pub user_id: isize,
+    pub user_code: isize,
+    pub character: i8,
     pub favorite_character: i8,
+    pub is_skill_sealed: bool,
+    #[serde(rename = "is_char_uncapped")]
     pub is_uncapped: bool,
+    #[serde(rename = "is_char_uncapped_override")]
     pub is_uncapped_override: bool,
     pub rating: isize,
     pub is_hide_rating: bool,
+    pub recent_score: Vec<MostRecentScore>,
+    pub join_date: i64,
+    pub is_mutual: bool,
 }
 
-impl UserInfoForScoreLookup {
+impl UserInfoMinimum {
     pub fn new(conn: &DBAccessManager, user_id: isize) -> Result<Self, rusqlite::Error> {
         let mut stmt = conn
             .connection
             .prepare(sql_stmt::MINIMUM_USER_INFO)?;
-        let user_info = stmt
+        let mut user_info = stmt
             .query_row(params![user_id], |row| {
-                Ok(UserInfoForScoreLookup {
+                Ok(UserInfoMinimum {
                     name: row.get("user_name")?,
-                    user_code: format!("{:0>9}", row.get::<&str, i64>("user_code")?)
-                        .chars()
-                        .collect::<Vec<char>>()
-                        .chunks(3)
-                        .map(|c| c.iter().collect::<String>())
-                        .collect::<Vec<String>>()
-                        .join(" "),
+                    user_id,
+                    user_code: row.get::<&str, isize>("user_code")?,
+                    character: row.get("partner")?,
                     favorite_character: row.get("fav_partner")?,
+                    is_skill_sealed: row.get::<&str, String>("sealed")? == "t",
                     is_uncapped: row.get::<&str, String>("uncapped")? == "t",
                     is_uncapped_override: row.get::<&str, String>("uncapped_override")? == "t",
                     rating: row.get("rating")?,
                     is_hide_rating: row.get::<&str, String>("hide_rating")? == "t",
+                    recent_score: Vec::new(),
+                    join_date: row.get("join_date")?,
+                    is_mutual: false,
                 })
             })?;
+        match get_most_recent_score(conn, user_id)? {
+            None => {},
+            Some(score) => user_info.recent_score.push(score),
+        };
         Ok(user_info)
     }
 

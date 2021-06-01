@@ -524,6 +524,7 @@ pub fn score_lookup(
                 rating: row.get("rating")?,
                 base_rating: row.get("base_rating")?,
             };
+            log::debug!("{}", record.title);
             Ok(record)
         })?;
     Ok(results.into_iter().map(|x| x.unwrap()).collect())

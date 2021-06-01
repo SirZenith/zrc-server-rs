@@ -117,9 +117,9 @@
             width: 90%;
             height: 46%;
             background-image: url("/static/img/world/4.jpg");
-            background-position: 0% 60%;
+            background-position: 0% 50%;
             background-size: 100%;
-            background-attachment: fixed;
+            background-attachment: scroll;
             border-radius: 6px;
         }
 
@@ -224,7 +224,7 @@
     <style>
         .score-container {
             width: 40vw;
-            margin: 5em auto;
+            margin: 15em auto;
         }
 
         .bg-track-lost {
@@ -371,11 +371,11 @@
                     <img class="rating-badge" src="/static/img/rating_{{- rating_level -}}.png" />
                     <div class="rating-text-bg">
                         <span class="rating-integral">{{ rating_integer }}</span><span class="rating-fractional">.{{
-                            rating_fraction }}</span>
+                            "{:02}"|format(rating_fraction) }}</span>
                     </div>
                     <div class="rating-text">
                         <span class="rating-integral">{{ rating_integer }}</span><span class="rating-fractional">.{{
-                            rating_fraction }}</span>
+                            "{:02}"|format(rating_fraction) }}</span>
                     </div>
                 {% endif %}
             </div>

@@ -7,6 +7,7 @@ mod auth;
 mod character;
 mod dlc;
 pub mod error;
+mod friend;
 mod info;
 mod save;
 mod score;
@@ -78,7 +79,9 @@ pub fn api_filter(
         .or(score_token(is_auth_off, pool.clone()))
         .or(score_upload(is_auth_off, pool.clone()))
         .or(upload_backup_data(is_auth_off, pool.clone()))
-        .or(download_backup_data(is_auth_off, pool.clone()));
+        .or(download_backup_data(is_auth_off, pool.clone()))
+        .or(add_friend(is_auth_off, pool.clone()))
+        .or(delete_friend(is_auth_off, pool.clone()));
 
     let mut route = welcome
         .or(file_server)
@@ -93,10 +96,13 @@ pub fn api_filter(
     route.recover(api::error::handle_rejection).boxed()
 }
 
-// GET /user/
+// ----------------------------------------------------------------------------
+// info
+
+// POST /user/
 fn signup(pool: SqlitePool) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("user")
-        .and(warp::get())
+        .and(warp::post())
         .and(warp::body::form())
         .and(with_db_access_manager(pool))
         .and_then(info::signup)
@@ -203,6 +209,9 @@ fn user_setting(
         .and_then(info::user_setting)
 }
 
+// ----------------------------------------------------------------------------
+// dlc
+
 // GET /serve/download/me/song?url&sid
 fn get_download_list(
     is_auth_off: bool,
@@ -239,6 +248,9 @@ fn purchase_item(
         .and_then(dlc::purcahse_item)
 }
 
+// ----------------------------------------------------------------------------
+// character
+
 // POST /user/me/characters
 fn change_character(
     is_auth_off: bool,
@@ -263,6 +275,9 @@ fn toggle_uncap(
         .and(with_db_access_manager(pool))
         .and_then(character::toggle_uncap)
 }
+
+// ----------------------------------------------------------------------------
+// score
 
 // GET score/token
 fn score_token(
@@ -299,6 +314,9 @@ fn score_lookup(
         .and_then(score::score_lookup)
 }
 
+// ----------------------------------------------------------------------------
+// data backup
+
 // POST /user/me/save
 fn upload_backup_data(
     is_auth_off: bool,
@@ -323,3 +341,30 @@ fn download_backup_data(
         .and(with_db_access_manager(pool))
         .and_then(save::download_backup_data)
 }
+
+// POST /friend/me/add
+fn add_friend(
+    is_auth_off: bool,
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("friend" / "me" / "add")
+        .and(warp::post())
+        .and(warp::body::form())
+        .and(with_auth(is_auth_off))
+        .and(with_db_access_manager(pool))
+        .and_then(friend::add_friend)
+}
+
+// POST /friend/me/delete
+fn delete_friend(
+    is_auth_off: bool,
+    pool: SqlitePool,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("friend" / "me" / "delete")
+        .and(warp::post())
+        .and(warp::body::form())
+        .and(with_auth(is_auth_off))
+        .and(with_db_access_manager(pool))
+        .and_then(friend::delete_friend)
+}
+

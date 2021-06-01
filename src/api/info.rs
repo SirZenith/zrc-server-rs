@@ -48,12 +48,7 @@ pub async fn signup(form: HashMap<String, String>, mut conn: DBAccessManager) ->
 
     let pwd_hash = auth::hash_pwd(password);
     let user_id = conn.signup(name, &pwd_hash, email, device_id).map_err(|e| {
-        let err = match e {
-            ZrcDBError::UserNameExists => ZrcSVError::UserNameExists,
-            ZrcDBError::EmailExists => ZrcSVError::EmailExists,
-            _ => ZrcSVError::DBError(e)
-        };
-        warp::reject::custom(err)
+        warp::reject::custom(ZrcSVError::DBError(e))
     })?;
     let access_token = auth::create_jwt(user_id).map_err(|e| warp::reject::custom(e))?;
 
@@ -68,7 +63,7 @@ pub async fn signup(form: HashMap<String, String>, mut conn: DBAccessManager) ->
     })
 }
 
-// GET /auth/login
+// POST /auth/login
 pub async fn login(jwt: String) -> ZrcSVResult<impl warp::Reply> {
     let result = LoginToken {
         access_token: jwt,

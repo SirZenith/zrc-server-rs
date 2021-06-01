@@ -60,7 +60,13 @@ pub async fn score_lookup(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<
             let rating_level = user_info.get_rating_level();
             let template = RecordsTemplate {
                 user_name: user_info.name,
-                user_code: user_info.user_code,
+                user_code: format!("{:0>9}", user_info.user_code)
+                    .chars()
+                    .collect::<Vec<char>>()
+                    .chunks(3)
+                    .map(|c| c.iter().collect::<String>())
+                    .collect::<Vec<String>>()
+                    .join(" "),
                 rating_integer: user_info.rating / 100,
                 rating_fraction: user_info.rating % 100,
                 rating_level,

@@ -11,6 +11,35 @@ pub const TOGGLE_UNCAP: &str = r#"
     where user_id = ?1 and part_id = ?2;
 "#;
 
+pub const CHAR_INFO: &str = r#"
+    select
+        part_id,
+        frag_20,
+        prog_20,
+        overdrive_20,
+        ifnull(can_uncap, '') as can_uncap
+    from
+        partner
+"#;
+
+pub const INSERT_CHAR_STATS_FOR_USER: &str = r#"
+    replace into part_stats(
+        user_id,
+        part_id,
+        is_uncapped_override,
+        is_uncapped,
+        exp_val,
+        overdrive,
+        prog,
+        frag,
+        lv
+    ) values(
+        ?1, ?2,
+        ?3, ?4,
+        ?5, ?6, ?7, ?8, ?9
+    )
+"#;
+
 pub const CHAR_STATS: &str = r#"
     select
         ifnull(v.part_id, -1) as "have_voice",
@@ -128,7 +157,7 @@ pub const CHECK_USER_CODE_EXISTS: &str = r#"
     select 1 from player where user_code = ?1
 "#;
 
-pub const SING_UP: &str = r#"
+pub const SIGN_UP: &str = r#"
     insert into player(
         user_id, last_device_id, email, pwdhash,
         user_name, user_code, display_name
@@ -182,14 +211,17 @@ pub const MINIMUM_USER_INFO: &str = r#"
     select
         user_name,
         user_code,
+        ifnull(partner, 0) as "partner",
         (case when ifnull(favorite_partner, 0) = -1
         then 0
         else ifnull(favorite_partner, 0)
         end) as "fav_partner",
+        ifnull(is_skill_sealed, '') as sealed,
         ifnull(is_uncapped, '') as "uncapped",
         ifnull(is_uncapped_override, '') as "uncapped_override",
         rating,
-        ifnull(is_hide_rating, '') as "hide_rating"
+        ifnull(is_hide_rating, '') as "hide_rating",
+        join_date
     from
         player, part_stats
     where
@@ -287,7 +319,7 @@ pub const COMPUTE_RATING: &str = r#"
     best as (
         select rating
         from best_score b, score s
-        where b.user_id = 1
+        where b.user_id = ?1
             and b.user_id = s.user_id
             and b.played_date = s.played_date
         order by rating desc
@@ -345,7 +377,7 @@ pub const COMPUTE_R10_AND_B30: &str = r#"
     best as (
         select rating
         from best_score b, score s
-        where b.user_id = 1
+        where b.user_id = ?1
             and b.user_id = s.user_id
             and b.played_date = s.played_date
         order by rating desc
@@ -360,7 +392,8 @@ pub const COMPUTE_R10_AND_B30: &str = r#"
             and r.played_date = s.played_date
     )
     select
-        ifnull(b30, 0) / ifnull(b30_count, 1) b30, ifnull(r10, 0) / ifnull(r10_count, 1) r10
+        ifnull(ifnull(b30, 0) / ifnull(b30_count, 1), 0) b30,
+        ifnull(ifnull(r10, 0) / ifnull(r10_count, 1), 0) r10
     from (
         select sum(rating) b30, count(rating) b30_count from best
     ), (
@@ -461,4 +494,58 @@ pub const QUERY_BACKUP_DATA: &str = r#"
 
 pub const INSERT_OTHER_BACKUP: &str = r#"
     replace into data_backup values(?1, ?2, ?3, ?4, ?5, ?6, ?7);
+"#;
+
+// friend
+// ============================================================================
+pub const GET_FRIEND_ID: &str = r#"
+    select user_id from player where user_code = ?1
+"#;
+
+pub const CHECK_IF_FRIEND_EXISTS: &str = r#"
+    select exists(select * from friend_list where user_id = ?1 and friend_id = ?2)
+"#;
+
+// pub const CHECK_IS_MUTUAL: &str = r#"
+//     select exists(select * from friend_list where user_id = ?1 and friend_id = ?2)
+//         and exists(select * from friend_list where user_id = ?2 and friend_id = ?1)
+// "#;
+
+pub const GET_IS_MUTUAL: &str = r#"
+    select
+        ifnull(is_mutual, '')
+    from
+        friend_list
+    where user_id = ?1
+        and friend_id = ?2
+"#;
+
+pub const SET_MUTUAL: &str = r#"
+    update
+        friend_list
+    set
+        is_mutual = 't'
+    where user_id = ?1 and friend_id = ?2
+        or friend_id = ?1 and user_id = ?2
+"#;
+
+pub const UNSET_MUTUAL: &str = r#"
+    update
+        friend_list
+    set
+        is_mutual = 'f'
+    where user_id = ?1 and friend_id = ?2
+        or friend_id = ?1 and user_id = ?2
+"#;
+
+pub const ADD_FRIEND: &str = r#"
+    replace into friend_list(user_id, friend_id) values(?1, ?2)
+"#;
+
+pub const DELETE_FRIEND: &str = r#"
+    delete from friend_list where user_id = ?1 and friend_id = ?2
+"#;
+
+pub const GET_ALL_FRIEND_ID: &str = r#"
+    select friend_id from friend_list where user_id = ?1
 "#;

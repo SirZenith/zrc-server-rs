@@ -109,10 +109,6 @@ pub enum ZrcSVError {
     DBError(ZrcDBError),
     #[error("user not found")]
     UserNotFound,
-    #[error("this user name is already taken")]
-    UserNameExists,
-    #[error("this email is already used")]
-    EmailExists,
     #[error("invalid token")]
     InvalidToken(String),
     #[error("JWT token creation error")]
@@ -123,6 +119,10 @@ pub enum ZrcSVError {
     TemplateError(askama::Error),
     #[error("incomplete form, key '{0}' needed")]
     IncompleteForm(String),
+    #[error("improper form value for key '{0}', '{1}'")]
+    ImproperFormValue(String, String),
+    #[error("invalid friend code")]
+    InvalidFriendCode,
 }
 
 impl warp::reject::Reject for ZrcSVError {}
@@ -137,9 +137,7 @@ pub async fn handle_rejection(
     } else if let Some(e) = err.find::<ZrcSVError>() {
         match e {
             ZrcSVError::DBError(e) => handle_dberror(e),
-            ZrcSVError::UserNotFound => (StatusCode::FORBIDDEN, format!("user not found, check your user name/ email and password"), WRONG_USERNAME_OR_PWD),
-            ZrcSVError::UserNameExists => (StatusCode::CONFLICT, format!("{}", e), USERNAME_ALREADY_TAKEN),
-            ZrcSVError::EmailExists => (StatusCode::CONFLICT, format!("{}", e), EMAIL_ALREADY_USED),
+            ZrcSVError::UserNotFound => (StatusCode::FORBIDDEN, format!("user not found, check your user name/email and password"), WRONG_USERNAME_OR_PWD),
             ZrcSVError::InvalidToken(msg) => (StatusCode::FORBIDDEN, format!("invalid token, {}", msg), AUTH_FAILED),
             ZrcSVError::JWTTokenCreationError => (StatusCode::FORBIDDEN, "authentication token creation failed".to_string(), FUNCTION_NOT_AVAILABLE),
             ZrcSVError::NoAuthHeader => (StatusCode::FORBIDDEN, "can't read authentication header".to_string(), AUTH_FAILED),
@@ -147,7 +145,9 @@ pub async fn handle_rejection(
                 log::error!("template rendering error, {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "template rendering error".to_string(), UNKNOWN_ERROR)
             },
-            ZrcSVError::IncompleteForm(_) => (StatusCode::BAD_REQUEST, format!("{}", e), 1),
+            ZrcSVError::IncompleteForm(_) => (StatusCode::BAD_REQUEST, format!("{}", e), UNKNOWN_ERROR),
+            ZrcSVError::ImproperFormValue(_, _) => (StatusCode::BAD_REQUEST, format!("{}", e), UNKNOWN_ERROR),
+            ZrcSVError::InvalidFriendCode => (StatusCode::BAD_REQUEST, format!("{}", e), UNKNOWN_ERROR),
         }
     } else {
         log::error!("unhandled error, {:?}", err);
@@ -180,6 +180,8 @@ fn handle_dberror(err: &ZrcDBError) -> (StatusCode, String, i32) {
         }
         ZrcDBError::UserNameExists => (StatusCode::CONFLICT, format!("{}", err), USERNAME_ALREADY_TAKEN),
         ZrcDBError::EmailExists => (StatusCode::CONFLICT, format!("{}", err), EMAIL_ALREADY_USED),
+        ZrcDBError::FriendExists => (StatusCode::CONFLICT, format!("{}", err), ALREADY_FRIEND),
+        ZrcDBError::SelfFriend => (StatusCode::CONFLICT, format!("{}", err), SELF_FRIEND),
     };
     (status, message, error_code)
 }
