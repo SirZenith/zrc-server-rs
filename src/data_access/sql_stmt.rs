@@ -393,7 +393,8 @@ pub const QUERY_BEST_SCORE_FOR_LOOKUP: &str = r#"
         and s.song_id = c.song_id
         and s.difficulty = c.difficulty
     order by
-        rating desc;
+        rating desc
+    limit 60;
 "#;
 
 pub const UPDATE_RATING: &str = r#"
