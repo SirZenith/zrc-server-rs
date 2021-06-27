@@ -27,16 +27,16 @@ pub struct Cli {
     #[structopt(short, long, default_value = "localhost", help = "Hostname of server instance.")]
     hostname: String,
 
-    #[structopt(short, long, default_value = "8080", help = "Port number used by server.")]
+    #[structopt(short, long, default_value = "8080", help = "Port number used by server instance.")]
     port: u16,
 
-    #[structopt(short, long = "db", default_value = "./ZrcDB.db", help = "Path of data base file.")]
+    #[structopt(short, long = "db", default_value = "./ZrcDB.db", help = "Path to SQLite data base file used by server.")]
     db_path: String,
 
-    #[structopt(short = "r", long = "root", default_value = "./", help = "Root directory of static files.")]
+    #[structopt(short = "r", long = "root", default_value = "./", help = "Root directory of resource files.")]
     document_root: String,
     // final access URL will be http://<hostname>/<prefix-all>/<your-api>
-    #[structopt(long = "prefix-all", default_value = "", help = "Prefix for all API.")]
+    #[structopt(long = "prefix-all", default_value = "", help = "URL prefix for all API.")]
     prefix_all: String,
 
     // final access URL will be http://<hostname>/<prefix-all>/<prefix-static>/<your-filename>

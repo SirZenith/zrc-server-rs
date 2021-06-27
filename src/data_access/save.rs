@@ -152,11 +152,7 @@ impl BackupData {
         data
     }
 
-    pub fn insert_game_progress(
-        &self,
-        conn: &DBAccessManager,
-        user_id: isize,
-    ) -> Result<(), rusqlite::Error> {
+    pub fn insert_game_progress(&self, conn: &DBAccessManager, user_id: isize) -> ZrcDBResult<()> {
         let mut stmt = conn
             .connection
             .prepare(sql_stmt::INSERT_OTHER_BACKUP)
@@ -169,7 +165,16 @@ impl BackupData {
             self.devicemodelname.val,
             serde_json::to_string(&self.story[""]).unwrap(),
             (self.created_at / 1000) as i64,
-        ])?;
+        ])
+        .map_err(|e| {
+            ZrcDBError::Internal(
+                format!(
+                    "while inserting game pross backup data for user: {}",
+                    user_id
+                ),
+                e,
+            )
+        })?;
 
         Ok(())
     }
@@ -225,10 +230,15 @@ impl BackupData {
                         score_updated = true;
                     }
                     Err(e) => {
-                        println!(
-                            "Error upload local score for {}-{}, {:?}",
-                            record.song_id, record.difficulty, e
-                        );
+                        match e {
+                            ZrcDBError::DataNotFound(_) => {
+                                log::error!(
+                                    "failed to update score for {} due to lack of data",
+                                    iden
+                                );
+                            }
+                            _ => return Err(e),
+                        }
                     }
                 };
             }

@@ -8,8 +8,10 @@ pub async fn upload_backup_data(
     mut conn: DBAccessManager,
 ) -> ZrcSVResult<impl warp::Reply> {
     // println!("{}", serde_json::to_string(&data).unwrap());
-    data.update_score_on_cloud(&mut conn, user_id).unwrap();
-    data.insert_game_progress(&conn, user_id).unwrap();
+    data.update_score_on_cloud(&mut conn, user_id)
+        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
+    data.insert_game_progress(&conn, user_id)
+        .map_err(|e| warp::reject::custom(ZrcSVError::DBError(e)))?;
     let mut result = HashMap::new();
     result.insert("user_id", user_id);
     respond_ok(ResponseContainer {
@@ -21,7 +23,10 @@ pub async fn upload_backup_data(
 }
 
 // GET /user/me/save
-pub async fn download_backup_data(user_id: isize, conn: DBAccessManager) -> ZrcSVResult<impl warp::Reply> {
+pub async fn download_backup_data(
+    user_id: isize,
+    conn: DBAccessManager,
+) -> ZrcSVResult<impl warp::Reply> {
     let mut data = BackupData::new_with_id(user_id);
     match data.get_game_progress(&conn, user_id) {
         false => Ok(warp::reply::with_status(
