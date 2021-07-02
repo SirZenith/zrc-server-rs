@@ -231,10 +231,8 @@ use super::*;
 pub use character::CharacterStatses;
 use dlc::{DLItem, DlcInfo, DlcInfoList, InfoItem};
 pub use dlc::{DLRequest, ItemType};
-use info::{
-    GameInfo, MapInfoList, PackInfo, PackItem, UserInfo, UserInfoForItemPurchase
-};
 pub use info::UserInfoMinimum;
+use info::{GameInfo, MapInfoList, PackInfo, PackItem, UserInfo, UserInfoForItemPurchase};
 pub use score::{LookupedScore, ScoreRecord};
 
 pub type SqlitePool = Arc<Pool<SqliteConnectionManager>>;
@@ -481,10 +479,7 @@ impl DBAccessManager {
         tx.commit()
             .map_err(|e| DBAccessManager::map_err("while commit purchase", Some(e)))?;
         UserInfoForItemPurchase::new(self, user_id).map_err(|e| {
-            DBAccessManager::map_err(
-                "while generate user info after pack purchasing",
-                Some(e),
-            )
+            DBAccessManager::map_err("while generate user info after pack purchasing", Some(e))
         })
     }
 }
@@ -492,24 +487,12 @@ impl DBAccessManager {
 // ----------------------------------------------------------------------------
 /// Character management.
 impl DBAccessManager {
-    fn add_all_character_for_user(tx: &rusqlite::Transaction, user_id: isize) -> Result<(), rusqlite::Error> {
-        let mut stmt = tx.prepare(sql_stmt::CHAR_INFO)?;
-        let mut rows = stmt.query([])?;
-        let mut stmt = tx.prepare(sql_stmt::INSERT_CHAR_STATS_FOR_USER)?;
-        while let Some(row) = rows.next()? {
-            let can_uncap = row.get::<&str, String>("can_uncap")? == "t";
-            stmt.execute(params![
-                user_id,
-                row.get::<&str, i8>("part_id")?,
-                "f",
-                if can_uncap { "t" } else { "f" },
-                if can_uncap { 25000 } else { 10000 },
-                row.get::<&str, f64>("overdrive_20")?,
-                row.get::<&str, f64>("prog_20")?,
-                row.get::<&str, f64>("frag_20")?,
-                if can_uncap { 30 } else { 20 },
-            ])?;
-        }
+    fn add_all_character_for_user(
+        tx: &rusqlite::Transaction,
+        user_id: isize,
+    ) -> Result<(), rusqlite::Error> {
+        let mut stmt = tx.prepare(sql_stmt::ADD_CHAR_FOR_NEW_USER)?;
+        stmt.execute(params![user_id])?;
         Ok(())
     }
 
@@ -520,9 +503,15 @@ impl DBAccessManager {
         skill_sealed: bool,
     ) -> ZrcDBResult<usize> {
         let skill_sealed = if skill_sealed { "t" } else { "f" };
-        let mut stmt = self.connection.prepare(sql_stmt::CHANGE_CHARACTER).map_err(|e| {
-            DBAccessManager::map_err("while preparing statement for changing character", Some(e))
-        })?;
+        let mut stmt = self
+            .connection
+            .prepare(sql_stmt::CHANGE_CHARACTER)
+            .map_err(|e| {
+                DBAccessManager::map_err(
+                    "while preparing statement for changing character",
+                    Some(e),
+                )
+            })?;
         stmt.execute(params![char_id, skill_sealed, user_id])
             .map_err(|e| DBAccessManager::map_err("while changing character", Some(e)))
     }
@@ -618,32 +607,26 @@ impl DBAccessManager {
 
         let mut rng = thread_rng();
         let mut user_code: u32 = rng.gen_range(0..=999_999_999);
-        loop {
-            match tx.query_row(sql_stmt::CHECK_USER_CODE_EXISTS, [user_code], |row| {
-                Ok(row.get::<usize, usize>(0)?)
-            }) {
-                Ok(_) => user_code = (user_code + 1) % 1_000_000_000,
-                Err(e) => match e {
-                    rusqlite::Error::QueryReturnedNoRows => break,
-                    _ => {
-                        return Err(DBAccessManager::map_err(
-                            "while generating user code",
-                            Some(e),
-                        ))
-                    }
-                },
-            }
-        }
+        user_code = tx
+            .query_row(sql_stmt::GET_NEW_USER_CODE, [user_code], |row| {
+                Ok(row.get::<usize, u32>(0)?)
+            })
+            .map_err(|e| DBAccessManager::map_err("while generating user code", Some(e)))?;
         {
             let mut stmt = tx.prepare(sql_stmt::SIGN_UP).map_err(|e| {
                 DBAccessManager::map_err("while preparing statement for signing up", Some(e))
             })?;
-            stmt.execute(params![user_id, device_id, email, pwd_hash, user_name, user_code, user_name])
+            stmt.execute(params![
+                user_id, device_id, email, pwd_hash, user_name, user_code, user_name
+            ])
             .map_err(|e| DBAccessManager::map_err("while signing up", Some(e)))?;
         }
 
         DBAccessManager::add_all_character_for_user(&tx, user_id).map_err(|e| {
-            DBAccessManager::map_err(&format!("while adding character for user '{}'", user_id), Some(e))
+            DBAccessManager::map_err(
+                &format!("while adding character for user '{}'", user_id),
+                Some(e),
+            )
         })?;
 
         tx.commit()
@@ -673,13 +656,12 @@ impl DBAccessManager {
     }
 
     pub fn get_minimum_user_info(&self, user_id: isize) -> ZrcDBResult<UserInfoMinimum> {
-        UserInfoMinimum::new(&self, user_id)
-            .map_err(|e| {
-                DBAccessManager::map_err(
-                &format!("while querying minimum user info for user '{}'", user_id), 
-                Some(e)
-                )
-            })
+        UserInfoMinimum::new(&self, user_id).map_err(|e| {
+            DBAccessManager::map_err(
+                &format!("while querying minimum user info for user '{}'", user_id),
+                Some(e),
+            )
+        })
     }
 
     pub fn get_game_info(&self) -> ZrcDBResult<GameInfo> {
@@ -730,19 +712,21 @@ impl DBAccessManager {
     }
 
     pub fn set_favorite_character(&self, user_id: isize, char_id: isize) -> ZrcDBResult<usize> {
-        let mut stmt = self.connection.prepare(sql_stmt::SET_FAVORITE_CHARACTER).map_err(|e| {
-            DBAccessManager::map_err(
-                "while preparing statement for setting favorite character",
-            Some(e)
-            )
-        })?;
-        stmt.execute(params![char_id, user_id])
+        let mut stmt = self
+            .connection
+            .prepare(sql_stmt::SET_FAVORITE_CHARACTER)
             .map_err(|e| {
                 DBAccessManager::map_err(
-                    &format!("while querying map info for user '{}'", user_id),
-                    Some(e))
-
-            })
+                    "while preparing statement for setting favorite character",
+                    Some(e),
+                )
+            })?;
+        stmt.execute(params![char_id, user_id]).map_err(|e| {
+            DBAccessManager::map_err(
+                &format!("while querying map info for user '{}'", user_id),
+                Some(e),
+            )
+        })
     }
 
     pub fn set_user_setting(
@@ -767,9 +751,11 @@ impl DBAccessManager {
             )
         })?;
         let mut stmt = self.connection.prepare(stmt).map_err(|e| {
-            DBAccessManager::map_err("while preparing statement for setting user setting", Some(e))
-        }
-        )?;
+            DBAccessManager::map_err(
+                "while preparing statement for setting user setting",
+                Some(e),
+            )
+        })?;
         stmt.execute(params![value, user_id])
             .map_err(|e| DBAccessManager::map_err("while set user setting", Some(e)))
     }
@@ -809,9 +795,8 @@ impl DBAccessManager {
     }
 
     pub fn score_lookup(&self, user_id: isize) -> ZrcDBResult<Vec<LookupedScore>> {
-        score::score_lookup(self, user_id).map_err(|e| {
-            DBAccessManager::map_err("while processing score lookup", Some(e))
-        })
+        score::score_lookup(self, user_id)
+            .map_err(|e| DBAccessManager::map_err("while processing score lookup", Some(e)))
     }
 
     pub fn get_r10_and_b30(&self, user_id: isize) -> ZrcDBResult<(f64, f64)> {
@@ -830,67 +815,102 @@ impl DBAccessManager {
 // ----------------------------------------------------------------------------
 /// Friend system
 impl DBAccessManager {
-    fn get_friend_id(tx: &rusqlite::Transaction, friend_code: isize) -> Result<isize, rusqlite::Error> {
+    fn get_friend_id(
+        tx: &rusqlite::Transaction,
+        friend_code: isize,
+    ) -> Result<isize, rusqlite::Error> {
         let mut stmt = tx.prepare(sql_stmt::GET_FRIEND_ID)?;
         stmt.query_row(params![friend_code], |row| row.get(0))
     }
 
-    fn check_if_friend_exists(tx: &rusqlite::Transaction, user_id: isize, friend_id: isize) -> Result<bool, rusqlite::Error> {
+    fn check_if_friend_exists(
+        tx: &rusqlite::Transaction,
+        user_id: isize,
+        friend_id: isize,
+    ) -> Result<bool, rusqlite::Error> {
         let mut stmt = tx.prepare(sql_stmt::CHECK_IF_FRIEND_EXISTS)?;
         let result = stmt.query_row(params![user_id, friend_id], |row| row.get::<usize, bool>(0));
         match result {
-            Ok(check) => if check { Ok(true) } else { Ok(false) },
-            Err(e) => Err(e)
+            Ok(check) => {
+                if check {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 
-    fn set_mutual(tx: &rusqlite::Transaction, user_id: isize, friend_id: isize) -> Result<(), rusqlite::Error> {
+    fn set_mutual(
+        tx: &rusqlite::Transaction,
+        user_id: isize,
+        friend_id: isize,
+    ) -> Result<(), rusqlite::Error> {
         let mut stmt = tx.prepare(sql_stmt::SET_MUTUAL)?;
         stmt.execute(params![user_id, friend_id])?;
         Ok(())
     }
 
-    fn unset_mutual(tx: &rusqlite::Transaction, user_id: isize, friend_id: isize) -> Result<(), rusqlite::Error> {
+    fn unset_mutual(
+        tx: &rusqlite::Transaction,
+        user_id: isize,
+        friend_id: isize,
+    ) -> Result<(), rusqlite::Error> {
         let mut stmt = tx.prepare(sql_stmt::UNSET_MUTUAL)?;
         stmt.execute(params![user_id, friend_id])?;
         Ok(())
     }
 
     pub fn add_friend(&mut self, user_id: isize, friend_code: isize) -> ZrcDBResult<()> {
-        log::debug!("adding friend for user '{}' with friend code '{}'", user_id, friend_code);
+        log::debug!(
+            "adding friend for user '{}' with friend code '{}'",
+            user_id,
+            friend_code
+        );
         let tx = self.connection.transaction().map_err(|e| {
             DBAccessManager::map_err("while opening transacation for adding friend", Some(e))
         })?;
-        let friend_id = DBAccessManager::get_friend_id(&tx, friend_code).map_err(|e| {
-            DBAccessManager::map_err("while querying friend id", Some(e))
-        })?;
+        let friend_id = DBAccessManager::get_friend_id(&tx, friend_code)
+            .map_err(|e| DBAccessManager::map_err("while querying friend id", Some(e)))?;
         log::debug!("friend id: {}", friend_id);
         if friend_id == user_id {
-            return Err(ZrcDBError::SelfFriend)
+            return Err(ZrcDBError::SelfFriend);
         }
         match DBAccessManager::check_if_friend_exists(&tx, user_id, friend_id) {
-            Ok(check) => if check { return Err(ZrcDBError::FriendExists) },
-            Err(e) => return Err(
-                DBAccessManager::map_err("while check friend existance", Some(e))
-            ),
+            Ok(check) => {
+                if check {
+                    return Err(ZrcDBError::FriendExists);
+                }
+            }
+            Err(e) => {
+                return Err(DBAccessManager::map_err(
+                    "while check friend existance",
+                    Some(e),
+                ))
+            }
         }
         {
             let mut stmt = tx.prepare(sql_stmt::ADD_FRIEND).map_err(|e| {
                 DBAccessManager::map_err("while preparing statement for adding friend", Some(e))
             })?;
-            stmt.execute(params![user_id, friend_id]).map_err(|e| {
-                DBAccessManager::map_err("while adding friend", Some(e))
-            })?;
+            stmt.execute(params![user_id, friend_id])
+                .map_err(|e| DBAccessManager::map_err("while adding friend", Some(e)))?;
         }
-        match DBAccessManager::check_if_friend_exists(&tx,friend_id, user_id) {
-            Ok(check) => if check {
-                DBAccessManager::set_mutual(&tx, user_id, friend_id).map_err(|e| {
-                    DBAccessManager::map_err("while trying to set mutual friend", Some(e))
-                })?;
-            },
-            Err(e) => return Err(
-                DBAccessManager::map_err("while check friend existance", Some(e))
-            ),
+        match DBAccessManager::check_if_friend_exists(&tx, friend_id, user_id) {
+            Ok(check) => {
+                if check {
+                    DBAccessManager::set_mutual(&tx, user_id, friend_id).map_err(|e| {
+                        DBAccessManager::map_err("while trying to set mutual friend", Some(e))
+                    })?;
+                }
+            }
+            Err(e) => {
+                return Err(DBAccessManager::map_err(
+                    "while check friend existance",
+                    Some(e),
+                ))
+            }
         }
         tx.commit().map_err(|e| {
             DBAccessManager::map_err("while commiting change of adding friend", Some(e))
@@ -904,22 +924,26 @@ impl DBAccessManager {
         })?;
 
         match DBAccessManager::check_if_friend_exists(&tx, friend_id, user_id) {
-            Ok(check) => if check {
-                DBAccessManager::unset_mutual(&tx, user_id, friend_id).map_err(|e| {
-                    DBAccessManager::map_err("while trying to unset mutual friend", Some(e))
-                })?;
-            },
-            Err(e) => return Err(
-                DBAccessManager::map_err("while check friend existance", Some(e))
-            ),
+            Ok(check) => {
+                if check {
+                    DBAccessManager::unset_mutual(&tx, user_id, friend_id).map_err(|e| {
+                        DBAccessManager::map_err("while trying to unset mutual friend", Some(e))
+                    })?;
+                }
+            }
+            Err(e) => {
+                return Err(DBAccessManager::map_err(
+                    "while check friend existance",
+                    Some(e),
+                ))
+            }
         }
         {
             let mut stmt = tx.prepare(sql_stmt::DELETE_FRIEND).map_err(|e| {
                 DBAccessManager::map_err("while preparing statement for deleting friend", Some(e))
             })?;
-            stmt.execute(params![user_id, friend_id]).map_err(|e| {
-                DBAccessManager::map_err("while adding friend", Some(e))
-            })?;
+            stmt.execute(params![user_id, friend_id])
+                .map_err(|e| DBAccessManager::map_err("while adding friend", Some(e)))?;
         }
         tx.commit().map_err(|e| {
             DBAccessManager::map_err("while commiting change of deleting friend", Some(e))
@@ -927,22 +951,35 @@ impl DBAccessManager {
         Ok(())
     }
 
-    fn get_is_mutual(&self, user_id: isize, friend_id: isize) -> ZrcDBResult<bool>{
-        let mut stmt = self.connection.prepare(sql_stmt::GET_IS_MUTUAL).map_err(|e| {
-            DBAccessManager::map_err("while preparing statement for getting is mutual info", Some(e))
-        })?;
+    fn get_is_mutual(&self, user_id: isize, friend_id: isize) -> ZrcDBResult<bool> {
+        let mut stmt = self
+            .connection
+            .prepare(sql_stmt::GET_IS_MUTUAL)
+            .map_err(|e| {
+                DBAccessManager::map_err(
+                    "while preparing statement for getting is mutual info",
+                    Some(e),
+                )
+            })?;
         stmt.query_row(params![user_id, friend_id], |row| {
             Ok(row.get::<usize, String>(0)? == "t")
-        }).map_err(|e| DBAccessManager::map_err("while getting is mutual", Some(e)))
+        })
+        .map_err(|e| DBAccessManager::map_err("while getting is mutual", Some(e)))
     }
 
-    pub fn get_friend_list(&self, user_id: isize) -> ZrcDBResult<Vec::<UserInfoMinimum>> {
-        let mut stmt = self.connection.prepare(sql_stmt::GET_ALL_FRIEND_ID).map_err(|e| {
-            DBAccessManager::map_err("while preparing statement for querying all friend id", Some(e))
-        })?;
-        let mut rows = stmt.query(params![user_id]).map_err(|e| {
-            DBAccessManager::map_err("while querying all friend id", Some(e))
-        })?;
+    pub fn get_friend_list(&self, user_id: isize) -> ZrcDBResult<Vec<UserInfoMinimum>> {
+        let mut stmt = self
+            .connection
+            .prepare(sql_stmt::GET_ALL_FRIEND_ID)
+            .map_err(|e| {
+                DBAccessManager::map_err(
+                    "while preparing statement for querying all friend id",
+                    Some(e),
+                )
+            })?;
+        let mut rows = stmt
+            .query(params![user_id])
+            .map_err(|e| DBAccessManager::map_err("while querying all friend id", Some(e)))?;
         let mut infoes = Vec::new();
         while let Some(row) = rows.next().map_err(|e| {
             DBAccessManager::map_err("while reading results of all friend id", Some(e))

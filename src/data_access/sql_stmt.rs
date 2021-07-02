@@ -11,34 +11,34 @@ pub const TOGGLE_UNCAP: &str = r#"
     where user_id = ?1 and part_id = ?2;
 "#;
 
-pub const CHAR_INFO: &str = r#"
-    select
-        part_id,
-        frag_20,
-        prog_20,
-        overdrive_20,
-        ifnull(can_uncap, '') as can_uncap
-    from
-        partner
-"#;
+// pub const CHAR_INFO: &str = r#"
+//     select
+//         part_id,
+//         frag_20,
+//         prog_20,
+//         overdrive_20,
+//         ifnull(can_uncap, '') as can_uncap
+//     from
+//         partner
+// "#;
 
-pub const INSERT_CHAR_STATS_FOR_USER: &str = r#"
-    replace into part_stats(
-        user_id,
-        part_id,
-        is_uncapped_override,
-        is_uncapped,
-        exp_val,
-        overdrive,
-        prog,
-        frag,
-        lv
-    ) values(
-        ?1, ?2,
-        ?3, ?4,
-        ?5, ?6, ?7, ?8, ?9
-    )
-"#;
+// pub const INSERT_CHAR_STATS_FOR_USER: &str = r#"
+//     replace into part_stats(
+//         user_id,
+//         part_id,
+//         is_uncapped_override,
+//         is_uncapped,
+//         exp_val,
+//         overdrive,
+//         prog,
+//         frag,
+//         lv
+//     ) values(
+//         ?1, ?2,
+//         ?3, ?4,
+//         ?5, ?6, ?7, ?8, ?9
+//     )
+// "#;
 
 pub const CHAR_STATS: &str = r#"
     select
@@ -142,7 +142,7 @@ pub const PACK_ITEM: &str = r#"
 "#;
 
 pub const GET_NEW_USER_ID: &str = r#"
-    select max(user_id) + 1 as user_id from player
+    select max(user_id) + 1 as user_id from (select user_id from player union select 1)
 "#;
 
 pub const CHECK_USER_NAME_EXISTS: &str = r#"
@@ -153,8 +153,51 @@ pub const CHECK_EMAIL_EXISTS: &str = r#"
     select 1 from player where email = ?1
 "#;
 
-pub const CHECK_USER_CODE_EXISTS: &str = r#"
-    select 1 from player where user_code = ?1
+pub const GET_NEW_USER_CODE: &str = r#"
+    with code_list as (
+        select user_code from player union select 0 union select ?1
+    )
+    select
+        min(user_code) + 1
+    from
+        code_list
+    where
+        user_code + 1 not in (select user_code from code_list)
+        and user_code >= ?1
+"#;
+
+pub const ADD_CHAR_FOR_NEW_USER: &str = r#"
+    replace into part_stats(
+        user_id,
+        part_id,
+        is_uncapped_override,
+        is_uncapped,
+        exp_val,
+        overdrive,
+        prog,
+        frag,
+        lv
+    )
+    select
+        ?1 as user_id,
+        part_id,
+        'f' as is_uncapped_override,
+        ifnull(can_uncap, 'f') as is_uncapped,
+        CASE WHEN ifnull(can_uncap, 'f') = 't' THEN
+            25000
+        ELSE
+            10000
+        END as exp_val,
+        overdrive_20 as overdrive,
+        prog_20 as prog,
+        frag_20 as frag,
+        CASE WHEN ifnull(can_uncap, 'f') = 't' THEN
+            30
+        ELSE
+            20
+        END as lv
+    from
+        partner
 "#;
 
 pub const SIGN_UP: &str = r#"
