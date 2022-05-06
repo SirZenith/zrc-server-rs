@@ -1,4 +1,4 @@
-# Zrcaea Server
+# Server
 
 请求返回错误代码信息表：
 
